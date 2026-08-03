@@ -33,11 +33,11 @@ class QuestionBase(BaseModel):
     question_text: str = Field(..., min_length=1)
     question_type: QuestionType
     marks: int = Field(default=1, gt=0)
-    negative_marks: int = Field(default=0, ge=0)
+    negative_marks: float = Field(default=0.0, ge=0.0)
     difficulty: Difficulty = Difficulty.MEDIUM
     image_url: Optional[str] = Field(None, max_length=500)
     explanation: Optional[str] = None
-    order_number: int = Field(default=1, gt=0)
+    order_number: int = Field(default=0, ge=0)  # 0 means auto-assign in service
     is_required: bool = True
     is_active: bool = True
 

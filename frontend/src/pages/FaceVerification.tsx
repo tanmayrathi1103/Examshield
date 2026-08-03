@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Check, ShieldCheck, Loader2 } from 'lucide-react';
+import { useExams } from '../hooks/useExams';
 
 const FaceVerification: React.FC = () => {
-  const { faceVerified, setFaceVerified, exams } = useApp();
+  const { faceVerified, setFaceVerified } = useApp();
+  const { currentExam, fetchExamById } = useExams();
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const examId = searchParams.get('examId');
+  const { examId } = useParams<{ examId: string }>();
 
-  const exam = exams.find(e => e.id === examId);
+  const exam = currentExam;
 
   useEffect(() => {
     if (!examId) {
       navigate('/student/dashboard');
+    } else {
+      fetchExamById(examId, true);
     }
-  }, [examId, navigate]);
+  }, [examId, navigate, fetchExamById]);
 
   const handleVerify = () => {
     setVerifying(true);
@@ -30,7 +33,7 @@ const FaceVerification: React.FC = () => {
 
   const handleStartExam = () => {
     if (faceVerified && examId) {
-      navigate(`/student/live-exam?examId=${examId}`);
+      navigate(`/student/exam/${examId}/live`);
     }
   };
 

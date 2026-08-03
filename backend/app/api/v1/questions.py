@@ -97,7 +97,7 @@ def list_questions_for_exam(
     exam_id: uuid.UUID,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service)
 ):
     questions, total = service.list_questions_for_exam(exam_id, current_user.id, current_user.role, skip, limit)

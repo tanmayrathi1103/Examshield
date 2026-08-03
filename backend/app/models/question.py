@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, ForeignKey, Text, Enum as SQLAlchemyEnum, Boolean
+from sqlalchemy import String, Integer, ForeignKey, Text, Enum as SQLAlchemyEnum, Boolean, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List
 import uuid
@@ -16,7 +16,7 @@ class Question(Base, TimestampMixin, SoftDeleteMixin):
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     question_type: Mapped[QuestionType] = mapped_column(SQLAlchemyEnum(QuestionType), index=True, nullable=False)
     marks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    negative_marks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    negative_marks: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     difficulty: Mapped[Difficulty] = mapped_column(SQLAlchemyEnum(Difficulty), default=Difficulty.MEDIUM, index=True, nullable=False)
     
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

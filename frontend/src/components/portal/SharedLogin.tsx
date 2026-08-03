@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { Shield, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
+import { Mail, Lock, ArrowRight, ChevronRight, Home } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { PortalConfig } from '../../config/portalConfig';
+import { navigateAfterLogin } from '../../utils/portalNavigator';
+import { useNavigate } from 'react-router-dom';
 
-const Login: React.FC = () => {
-  const { login, isLoading, error: authError } = useAuth();
+interface SharedLoginProps {
+  config: PortalConfig;
+}
+
+const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
+  const { login, logout, isLoading, error: authError } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,9 +29,19 @@ const Login: React.FC = () => {
 
     try {
       const user = await login({ email, password });
-      if (user.role === 'student') navigate('/student/dashboard');
-      else if (user.role === 'faculty') navigate('/faculty/dashboard');
-      else if (user.role === 'admin') navigate('/admin/dashboard');
+      
+      // Role Validation
+      if (user.role !== config.expectedRole) {
+        await logout(); // Discard the token
+        setError(`This account belongs to the ${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Portal. Please sign in through the correct portal.`);
+        return;
+      }
+      
+      // Remember last portal
+      localStorage.setItem('lastUsedPortal', config.id);
+
+      // Future compatibility: Post-login flow handled by portalNavigator
+      navigateAfterLogin(config, navigate);
     } catch (err: any) {
       // Error is already handled and stored in authError by the hook
       console.error('Login failed', err);
@@ -32,28 +49,37 @@ const Login: React.FC = () => {
   };
 
   const displayError = error || authError;
+  const Icon = config.icon;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-6 py-12 relative overflow-hidden bg-slate-50">
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-primary-100/50 -z-10" />
+    <div className="flex flex-col items-center justify-center py-12 px-6">
       
+      {/* Breadcrumbs */}
+      <div className="w-full max-w-md mb-6 flex items-center text-sm font-semibold text-slate-500">
+        <Link to="/" className="hover:text-indigo-600 transition-colors flex items-center gap-1"><Home className="w-4 h-4" /> Home</Link>
+        <ChevronRight className="w-4 h-4 mx-1 opacity-50" />
+        <Link to="/login" className="hover:text-indigo-600 transition-colors">Portals</Link>
+        <ChevronRight className="w-4 h-4 mx-1 opacity-50" />
+        <span className={`text-${config.theme.primary}`}>{config.title}</span>
+      </div>
+
       <motion.div 
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md glass p-8 rounded-3xl border border-white/50 shadow-2xl bg-white/75"
+        className="w-full max-w-md glass p-8 rounded-3xl border border-white/50 shadow-2xl bg-white/75 relative"
       >
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/30">
-            <Shield className="w-6 h-6" />
+        <div className="flex flex-col items-center mt-2 mb-8">
+          <div className={`w-12 h-12 ${config.theme.iconBg} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg ${config.theme.shadow}`}>
+            <Icon className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">Welcome Back</h2>
-          <p className="text-sm text-slate-500 mt-1">Access the AI Proctoring Dashboard</p>
+          <h2 className="text-2xl font-bold text-slate-800">{config.title}</h2>
+          <p className="text-sm text-slate-500 mt-1 text-center px-4">{config.subtitle}</p>
         </div>
 
         {displayError && (
-          <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-100">
-            {displayError}
+          <div className="mb-6 p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-100 flex items-start text-left">
+            <span className="mt-0.5">{displayError}</span>
           </div>
         )}
 
@@ -94,9 +120,9 @@ const Login: React.FC = () => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className={`w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:bg-indigo-700 hover:shadow-indigo-500/40'}`}
+            className={`w-full py-3.5 ${config.theme.iconBg} text-white rounded-xl font-bold text-sm transition-all shadow-lg ${config.theme.shadow} flex items-center justify-center gap-2 ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:brightness-110 hover:shadow-xl'}`}
           >
-            {isLoading ? 'Signing In...' : (
+            {isLoading ? 'Verifying Account...' : (
               <>Sign In <ArrowRight className="w-4 h-4" /></>
             )}
           </button>
@@ -106,4 +132,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default SharedLogin;

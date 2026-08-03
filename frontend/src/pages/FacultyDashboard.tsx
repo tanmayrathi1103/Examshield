@@ -1,173 +1,210 @@
-import React, { useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useEffect, useState } from 'react';
 import { useExams } from '../hooks/useExams';
-import { Users, FileText, CheckSquare, ShieldAlert, TrendingUp, Monitor } from 'lucide-react';
-import { Bar } from 'react-chartjs-2';
+import { Users, FileText, CheckSquare, Monitor, PlusCircle, Calendar, Search, Trash2, Clock, CheckCircle, Archive, PenTool } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Card, Button, Badge, ConfirmDialog, EmptyState, Skeleton } from '../components/ui';
 
 const FacultyDashboard: React.FC = () => {
-  const { students, violations } = useApp();
-  const { exams, fetchExams, isLoading } = useExams();
+  const { exams, stats, fetchExams, fetchStats, isLoading, deleteExam } = useExams();
   const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string, name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchExams();
-  }, [fetchExams]);
+    fetchStats();
+  }, [fetchExams, fetchStats]);
 
-  const totalStudents = students.length;
-  const activeExams = exams.filter(e => e.status === 'upcoming').length;
-  const totalViolationsCount = violations.length;
-
-  // Chart Data: Student Trust distribution
-  const chartData = {
-    labels: students.map(s => s.name),
-    datasets: [
-      {
-        label: 'Integrity Trust Index (%)',
-        data: students.map(s => s.integrityScore),
-        backgroundColor: 'rgba(99, 102, 241, 0.75)',
-        borderRadius: 8,
-      }
-    ]
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Not scheduled';
+    return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteExam(confirmDelete.id);
+      await fetchExams();
+      await fetchStats();
+      setConfirmDelete(null);
+    } catch (err) {
+      console.error('Failed to delete exam', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const filteredExams = exams.filter(exam => 
+    exam.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    exam.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    exam.exam_code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-slate-800">Faculty Administration</h1>
-        <p className="text-slate-500">Manage assessments, question banks, and live AI monitoring feeds.</p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">Monitored Students</div>
-            <div className="text-2xl font-black text-slate-800 mt-1">{totalStudents} Students</div>
-          </div>
+    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+      {/* Top Navigation & Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Faculty Workspace</h1>
+          <p className="text-slate-500 text-sm mt-1">Manage your assessments and monitor students.</p>
         </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">Scheduled Exams</div>
-            <div className="text-2xl font-black text-slate-800 mt-1">{isLoading ? '...' : activeExams} Active</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">System Violations</div>
-            <div className="text-2xl font-black text-slate-800 mt-1">{totalViolationsCount} Flags</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md flex items-center gap-4">
-          <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">Avg Trust Index</div>
-            <div className="text-2xl font-black text-slate-800 mt-1">
-              {students.length ? Math.round(students.reduce((acc, curr) => acc + curr.integrityScore, 0) / students.length) : 0}%
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid Layout: Chart and Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Compliance Graph */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-md">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Student Integrity Distribution</h3>
-          <div className="h-64 flex items-center justify-center">
-            <Bar 
-              data={chartData} 
-              options={{ 
-                responsive: true, 
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-              }} 
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="relative flex-grow md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search assessments..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
             />
           </div>
-        </div>
-
-        {/* Shortcuts / Quick Actions */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-md space-y-4">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b pb-2">Faculty Console</h3>
-          
-          <button 
-            onClick={() => navigate('/faculty/live-monitoring')}
-            className="w-full p-4 hover:bg-slate-50 border rounded-xl transition-all flex items-center gap-3 text-left font-bold text-slate-700 text-sm"
-          >
-            <Monitor className="w-5 h-5 text-indigo-600" />
-            <div>
-              <div>Live Monitor Feed</div>
-              <div className="text-[10px] text-slate-400 font-medium">Watch student cameras and triggers real time.</div>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => navigate('/faculty/create-exam')}
-            className="w-full p-4 hover:bg-slate-50 border rounded-xl transition-all flex items-center gap-3 text-left font-bold text-slate-700 text-sm"
-          >
-            <FileText className="w-5 h-5 text-indigo-600" />
-            <div>
-              <div>Configure New Exam</div>
-              <div className="text-[10px] text-slate-400 font-medium">Write title, durations, and scheduled dates.</div>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => navigate('/faculty/questions')}
-            className="w-full p-4 hover:bg-slate-50 border rounded-xl transition-all flex items-center gap-3 text-left font-bold text-slate-700 text-sm"
-          >
-            <CheckSquare className="w-5 h-5 text-indigo-600" />
-            <div>
-              <div>Maintain Question Bank</div>
-              <div className="text-[10px] text-slate-400 font-medium">View, edit, or add items to core database.</div>
-            </div>
-          </button>
+          <Button onClick={() => navigate('/faculty/create-exam')} leftIcon={<PlusCircle className="w-4 h-4" />}>
+            New
+          </Button>
         </div>
       </div>
 
-      {/* Active Exams List */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-md">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Recent Assessments</h3>
-        {isLoading ? (
-          <div className="text-sm text-slate-500 italic">Loading assessments...</div>
-        ) : exams.length === 0 ? (
-          <div className="text-sm text-slate-500 italic">No assessments scheduled yet.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {exams.map(exam => (
-              <div key={exam.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition-colors">
-                <div>
-                  <div className="font-bold text-slate-800">{exam.title}</div>
-                  <div className="text-xs text-slate-500 font-semibold">{exam.exam_code} • {exam.subject}</div>
-                  <div className="text-[10px] text-slate-400 font-medium mt-1">Status: {exam.status}</div>
-                </div>
-                <button 
-                  onClick={() => navigate(`/faculty/questions?examId=${exam.id}`)}
-                  className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs rounded-lg transition-colors"
-                >
-                  Manage Exam
-                </button>
+      {/* Statistics Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Active Assessments', value: stats?.active_exams || 0, icon: <Monitor className="text-indigo-600" />, bg: 'bg-indigo-50' },
+          { label: 'Scheduled Today', value: stats?.scheduled_exams || 0, icon: <Calendar className="text-blue-600" />, bg: 'bg-blue-50' },
+          { label: 'Students Assigned', value: stats?.students_assigned || 0, icon: <Users className="text-emerald-600" />, bg: 'bg-emerald-50' },
+          { label: 'Question Bank', value: stats?.total_questions || 0, icon: <CheckSquare className="text-violet-600" />, bg: 'bg-violet-50' },
+        ].map((stat, i) => (
+          <Card key={i} className="p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+            {isLoading ? (
+              <Skeleton className="w-12 h-12 rounded-xl" />
+            ) : (
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg}`}>
+                {stat.icon}
               </div>
-            ))}
-          </div>
-        )}
+            )}
+            <div>
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-3 w-20 mb-2" />
+                  <Skeleton className="h-6 w-12" />
+                </>
+              ) : (
+                <>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</div>
+                  <div className="text-2xl font-black text-slate-800">{stat.value}</div>
+                </>
+              )}
+            </div>
+          </Card>
+        ))}
       </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        
+        {/* Recent Assessments */}
+        <div className="xl:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-800">Recent Assessments</h2>
+          </div>
+          
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
+            </div>
+          ) : filteredExams.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {filteredExams.map(exam => (
+                <Card key={exam.id} className="p-5 flex flex-col group hover:shadow-md hover:border-indigo-100 transition-all">
+                  <div className="flex justify-between items-start mb-3">
+                    <Badge variant={exam.status}>{exam.status}</Badge>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => navigate(`/faculty/manage-exam/${exam.id}`)}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Manage"
+                      >
+                        <PenTool className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setConfirmDelete({ id: exam.id, name: exam.title })}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-lg leading-tight mb-1 truncate">{exam.title}</h3>
+                  <div className="text-xs font-semibold text-slate-500 mb-4">{exam.exam_code} • {exam.subject || 'No Subject'}</div>
+                  
+                  <div className="mt-auto grid grid-cols-2 gap-2 text-[11px] font-medium text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      {exam.duration_minutes} mins
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-slate-400" />
+                      {exam.total_marks} Marks
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyState 
+              icon={FileText} 
+              title={searchQuery ? "No matching assessments" : "No assessments found"}
+              description={searchQuery ? "Try a different search term." : "Create your first assessment to get started."}
+              action={!searchQuery && <Button onClick={() => navigate('/faculty/create-exam')}>Create Assessment</Button>}
+            />
+          )}
+        </div>
+
+        {/* Quick Actions Sidebar */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-slate-800">Quick Actions</h2>
+          <Card className="p-4 space-y-2">
+            {[
+              { label: 'Create Assessment', desc: 'Build a new exam', icon: PlusCircle, color: 'text-indigo-600', bg: 'bg-indigo-50', path: '/faculty/create-exam' },
+              { label: 'Question Bank', desc: 'Manage your questions', icon: CheckSquare, color: 'text-violet-600', bg: 'bg-violet-50', path: '/faculty/questions' },
+              { label: 'Live Monitor', desc: 'Watch active sessions', icon: Monitor, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/faculty/live-monitoring' },
+              { label: 'Archived', desc: 'View past exams', icon: Archive, color: 'text-slate-600', bg: 'bg-slate-100', path: '/faculty/dashboard' },
+            ].map((action, i) => (
+              <button
+                key={i}
+                onClick={() => navigate(action.path)}
+                className="w-full p-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-left border border-transparent hover:border-slate-200"
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${action.bg} ${action.color}`}>
+                  <action.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-800">{action.label}</div>
+                  <div className="text-[10px] font-medium text-slate-500">{action.desc}</div>
+                </div>
+              </button>
+            ))}
+          </Card>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        title="Delete Assessment"
+        message={
+          <div className="space-y-2">
+            <p>This action cannot be undone.</p>
+            <p>Deleting this assessment will also remove all associated <strong>Questions</strong>, <strong>Student Assignments</strong>, and <strong>Exam Attempts</strong>.</p>
+          </div>
+        }
+        confirmText="Delete Assessment"
+        requireTypedConfirmation={confirmDelete?.name}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(null)}
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

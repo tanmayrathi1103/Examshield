@@ -1,220 +1,148 @@
-import React, { useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useEffect, useState } from 'react';
 import { useExams } from '../hooks/useExams';
-import { ShieldCheck, Video, Mic, Wifi, ShieldAlert, Award, FileText, ArrowRight, CheckCircle, HelpCircle, User } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { Clock, BookOpen, Award, Play, CheckCircle, Calendar, AlertCircle } from 'lucide-react';
 
 const StudentDashboard: React.FC = () => {
-  const {
-    currentUser,
-    isCamOn,
-    isMicOn,
-    isInternetStable,
-    isBrowserSecure,
-    faceRegistered
-  } = useApp();
-  
-  const { exams, fetchStudentExams, isLoading } = useExams();
+  const { exams, fetchStudentExams, isLoading, error } = useExams();
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Fetches only ACTIVE / SCHEDULED exams via /student/exams endpoint (backend filtered)
     fetchStudentExams();
   }, [fetchStudentExams]);
 
-  // Using real currentUser, default integrityScore to 94 if not present in schema
-  const currentStudent = {
-    name: currentUser?.full_name || 'Student',
-    integrityScore: 94,
-    status: 'active'
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Not scheduled';
+    return new Date(dateStr).toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
   };
 
-  const getSystemStatus = () => {
-    const checks = [isCamOn, isMicOn, isInternetStable, isBrowserSecure, faceRegistered];
-    const passed = checks.filter(Boolean).length;
-    return { passed, total: checks.length };
-  };
 
-  const status = getSystemStatus();
-  const upcomingExams = exams.filter(e => e.status === 'upcoming');
+
+  const getStatusConfig = (exam: typeof exams[0]) => {
+    const now = new Date();
+    if (exam.end_time && new Date(exam.end_time) < now) {
+      return { label: 'Expired', color: 'bg-rose-100 text-rose-700', canStart: false };
+    }
+    if (exam.start_time && new Date(exam.start_time) > now) {
+      return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700', canStart: false };
+    }
+    if (exam.status === 'active' || exam.status === 'scheduled') {
+      return { label: 'Available', color: 'bg-emerald-100 text-emerald-700', canStart: true };
+    }
+    return { label: exam.status, color: 'bg-slate-100 text-slate-600', canStart: false };
+  };
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-indigo-600 to-primary-600 text-white rounded-3xl p-8 shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl" />
-        <div className="relative space-y-3 max-w-xl">
-          <div className="inline-block px-3 py-1 bg-white/10 rounded-full text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
-            Academic Year 2026
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Hello, {currentStudent.name} </h1>
-          <p className="text-indigo-100/90 text-sm md:text-base leading-relaxed">
-            Welcome to the AI proctored examination portal. Please ensure your system parameters are fully certified before entering any exam.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-extrabold text-slate-800">Student Portal</h1>
+        <p className="text-slate-500 mt-1">Your assigned examinations appear below.</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Integrity Card */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-md flex items-center gap-5">
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white ${currentStudent.integrityScore >= 90 ? 'bg-emerald-500' : currentStudent.integrityScore >= 75 ? 'bg-amber-500' : 'bg-rose-500'
-            }`}>
-            <Award className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">Proctoring Trust Score</div>
-            <div className="text-2xl font-extrabold text-slate-800 mt-1">{currentStudent.integrityScore}%</div>
-            <div className="text-xs text-slate-500 mt-0.5">Updated in real-time</div>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl">
+          <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />
+          <p className="text-sm font-semibold text-rose-700">{error}</p>
         </div>
+      )}
 
-        {/* System Cert Card */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-md flex items-center gap-5">
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white ${status.passed === status.total ? 'bg-indigo-600' : 'bg-amber-500'
-            }`}>
-            <ShieldCheck className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">System Certification</div>
-            <div className="text-2xl font-extrabold text-slate-800 mt-1">{status.passed} / {status.total} Passed</div>
-            <button
-              onClick={() => navigate('/student/system-check')}
-              className="text-xs text-indigo-600 font-bold hover:underline mt-0.5 block"
-            >
-              Verify System Parameters
-            </button>
-          </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-48">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600" />
         </div>
-
-        {/* Exams Left Card */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-md flex items-center gap-5">
-          <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
-            <FileText className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase">Upcoming Exams</div>
-            <div className="text-2xl font-extrabold text-slate-800 mt-1">
-              {isLoading ? '...' : `${upcomingExams.length} Exams Scheduled`}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">Check schedule below</div>
-          </div>
+      ) : exams.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center">
+          <BookOpen className="w-14 h-14 text-slate-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-slate-600 mb-1">No Exams Assigned</h3>
+          <p className="text-sm text-slate-400">You have no published exams assigned to you at this time.</p>
+          <p className="text-xs text-slate-400 mt-2">Contact your faculty member if you believe this is incorrect.</p>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {exams.map(exam => {
+            const statusCfg = getStatusConfig(exam);
+            return (
+              <div
+                key={exam.id}
+                className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 overflow-hidden flex flex-col"
+              >
+                {/* Top color stripe based on status */}
+                <div className={`h-1.5 w-full ${statusCfg.canStart ? 'bg-emerald-500' : 'bg-slate-300'}`} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Scheduled / Upcoming Exams */}
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-indigo-600" />
-            Your Scheduled Examinations
-          </h3>
+                <div className="p-6 flex flex-col flex-1 space-y-4">
+                  {/* Title & Status */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-extrabold text-slate-800 leading-tight text-base">{exam.title}</h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">{exam.exam_code} • {exam.subject}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${statusCfg.color}`}>
+                      {statusCfg.label}
+                    </span>
+                  </div>
 
-          <div className="space-y-4">
-            {isLoading ? (
-               <div className="p-8 text-center italic text-slate-400">Loading exams...</div>
-            ) : upcomingExams.length === 0 ? (
-               <div className="p-8 text-center italic text-slate-400">No upcoming exams.</div>
-            ) : upcomingExams.map((exam) => (
-              <div key={exam.id} className="bg-white rounded-2xl p-6 border border-slate-200 hover:shadow-lg transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-indigo-600">{exam.exam_code} • {exam.subject}</div>
-                  <h4 className="text-lg font-extrabold text-slate-800">{exam.title}</h4>
-                  <div className="text-xs font-medium text-slate-400 flex gap-4">
-                    <span>Duration: {exam.duration_minutes} mins</span>
-                    <span>Date: {exam.start_time ? new Date(exam.start_time).toLocaleDateString() : 'TBA'}</span>
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+                        <Clock className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">Duration</div>
+                        <div className="text-xs font-bold text-slate-700">{exam.duration_minutes} min</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
+                        <Award className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">Marks</div>
+                        <div className="text-xs font-bold text-slate-700">{exam.total_marks}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2 text-xs text-slate-500">
+                    <Calendar className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                    <span className="font-medium">{formatDate(exam.start_time)}</span>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="mt-auto pt-2">
+                    {statusCfg.canStart ? (
+                      <button
+                        onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/10 hover:-translate-y-0.5"
+                      >
+                        <Play className="w-4 h-4" /> Start Exam
+                      </button>
+                    ) : exam.start_time && new Date(exam.start_time) > new Date() ? (
+                      <button
+                        disabled
+                        className="w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                      >
+                        <Calendar className="w-4 h-4" /> Opens {formatDate(exam.start_time)}
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="w-full py-3 bg-rose-50 text-rose-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                      >
+                        <AlertCircle className="w-4 h-4" /> Exam Expired
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <button
-                  onClick={() => {
-                    if (!faceRegistered) {
-                      navigate('/student/face-registration');
-                    } else if (status.passed < status.total) {
-                      navigate('/student/system-check');
-                    } else {
-                      // Navigate to verification/instructions
-                      navigate(`/student/instructions?examId=${exam.id}`);
-                    }
-                  }}
-                  className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5"
-                >
-                  Start Exam Process <ArrowRight className="w-4 h-4" />
-                </button>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
-
-        {/* Verification Status Sidebar widget */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-indigo-600" />
-            AI Compliance Checklist
-          </h3>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <Video className={`w-5 h-5 ${isCamOn ? 'text-emerald-500' : 'text-slate-400'}`} />
-                <span className="text-sm font-bold text-slate-700">Camera Feed</span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isCamOn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {isCamOn ? 'Certified' : 'Failed'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <Mic className={`w-5 h-5 ${isMicOn ? 'text-emerald-500' : 'text-slate-400'}`} />
-                <span className="text-sm font-bold text-slate-700">Microphone</span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isMicOn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {isMicOn ? 'Certified' : 'Failed'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <Wifi className={`w-5 h-5 ${isInternetStable ? 'text-emerald-500' : 'text-slate-400'}`} />
-                <span className="text-sm font-bold text-slate-700">Stable Connection</span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isInternetStable ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {isInternetStable ? 'Certified' : 'Failed'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className={`w-5 h-5 ${isBrowserSecure ? 'text-emerald-500' : 'text-slate-400'}`} />
-                <span className="text-sm font-bold text-slate-700">Lockdown Browser</span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isBrowserSecure ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {isBrowserSecure ? 'Certified' : 'Failed'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <User className={`w-5 h-5 ${faceRegistered ? 'text-emerald-500' : 'text-slate-400'}`} />
-                <span className="text-sm font-bold text-slate-700">Facial Signature</span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${faceRegistered ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {faceRegistered ? 'Registered' : 'Missing'}
-              </span>
-            </div>
-
-            {status.passed < status.total && (
-              <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100 flex gap-2">
-                <HelpCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                <div className="text-xs text-amber-800 font-medium">
-                  Please resolve failed parameters before initiating exams.
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

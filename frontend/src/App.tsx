@@ -9,7 +9,10 @@ import Home from './pages/Home';
 import About from './pages/About';
 import Features from './pages/Features';
 import Contact from './pages/Contact';
-import Login from './pages/Login';
+import PortalSelection from './pages/PortalSelection';
+import StudentLogin from './pages/StudentLogin';
+import FacultyLogin from './pages/FacultyLogin';
+import AdminLogin from './pages/AdminLogin';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import NotFound from './pages/NotFound';
@@ -31,6 +34,7 @@ import QuestionBank from './pages/QuestionBank';
 import CreateExam from './pages/CreateExam';
 import LiveMonitoring from './pages/LiveMonitoring';
 import StudentReports from './pages/StudentReports';
+import ManageExam from './pages/ManageExam';
 
 // Admin Pages
 import AdminDashboard from './pages/AdminDashboard';
@@ -75,7 +79,10 @@ function App() {
             <Route path="about" element={<About />} />
             <Route path="features" element={<Features />} />
             <Route path="contact" element={<Contact />} />
-            <Route path="login" element={<Login />} />
+            <Route path="login" element={<PortalSelection />} />
+            <Route path="login/student" element={<StudentLogin />} />
+            <Route path="login/faculty" element={<FacultyLogin />} />
+            <Route path="login/admin" element={<AdminLogin />} />
             <Route path="register" element={<Register />} />
             <Route path="forgot-password" element={<ForgotPassword />} />
           </Route>
@@ -86,17 +93,17 @@ function App() {
             <Route path="student/dashboard" element={<StudentDashboard />} />
             <Route path="student/system-check" element={<SystemCheck />} />
             <Route path="student/face-registration" element={<FaceRegistration />} />
-            <Route path="student/face-verification" element={<FaceVerification />} />
-            <Route path="student/instructions" element={<Instructions />} />
-            <Route path="student/live-exam" element={<LiveExam />} />
-            <Route path="student/exam-result" element={<ExamResult />} />
+            <Route path="student/exam/:examId/face-verification" element={<FaceVerification />} />
+            <Route path="student/exam/:examId/instructions" element={<Instructions />} />
+            <Route path="student/exam/:examId/live" element={<LiveExam />} />
+            <Route path="student/exam/:examId/result" element={<ExamResult />} />
             <Route path="student/report" element={<BehaviourReport />} />
             <Route path="student/history" element={<ExamHistory />} />
 
-            {/* Faculty Portal */}
             <Route path="faculty/dashboard" element={<FacultyDashboard />} />
             <Route path="faculty/questions" element={<QuestionBank />} />
             <Route path="faculty/create-exam" element={<CreateExam />} />
+            <Route path="faculty/manage-exam/:examId" element={<ManageExam />} />
             <Route path="faculty/live-monitoring" element={<LiveMonitoring />} />
             <Route path="faculty/student-reports" element={<StudentReports />} />
 

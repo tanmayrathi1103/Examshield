@@ -47,3 +47,29 @@ export interface ExamAssignmentListResponse {
   items: ExamAssignmentResponse[];
   total: number;
 }
+
+export interface StudentForAssignment {
+  id: string;
+  full_name: string;
+  email: string;
+  enrollment_number?: string;
+  branch?: string;
+  semester?: number;
+  is_assigned: boolean;
+}
+
+export interface StudentForAssignmentList {
+  items: StudentForAssignment[];
+  total: number;
+}
+
+export interface ExamStatsResponse {
+  total_exams: number;
+  draft_exams: number;
+  active_exams: number;
+  scheduled_exams: number;
+  completed_exams: number;
+  total_questions: number;
+  students_assigned: number;
+  completed_attempts: number;
+}

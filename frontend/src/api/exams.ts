@@ -1,12 +1,18 @@
 import apiClient from './axios';
-import type { 
-  ExamListResponse, ExamResponse, ExamCreate, ExamUpdate, 
+import type {
+  ExamListResponse, ExamResponse, ExamCreate, ExamUpdate,
   ExamAssignmentListResponse, ExamAssignmentResponse,
-  StartExamRequest, SubmitExamRequest, ExamResultResponse 
+  StudentForAssignmentList, ExamStatsResponse
 } from '../types';
 
 export const examsApi = {
-  // Common Exam Listing (Role based handled on backend)
+  // ── Faculty / Admin ──────────────────────────────────────────────────────
+
+  getFacultyStats: async (): Promise<ExamStatsResponse> => {
+    const response = await apiClient.get<ExamStatsResponse>('/exams/stats');
+    return response.data;
+  },
+
   listExams: async (skip: number = 0, limit: number = 100): Promise<ExamListResponse> => {
     const response = await apiClient.get<ExamListResponse>(`/exams?skip=${skip}&limit=${limit}`);
     return response.data;
@@ -41,9 +47,15 @@ export const examsApi = {
     return response.data;
   },
 
+  // ── Assignment ───────────────────────────────────────────────────────────
+
   assignStudents: async (id: string, studentIds: string[]): Promise<ExamAssignmentResponse[]> => {
     const response = await apiClient.post<ExamAssignmentResponse[]>(`/exams/${id}/assign`, { student_ids: studentIds });
     return response.data;
+  },
+
+  removeStudent: async (examId: string, studentId: string): Promise<void> => {
+    await apiClient.delete(`/exams/${examId}/students/${studentId}`);
   },
 
   getAssignments: async (id: string, skip: number = 0, limit: number = 100): Promise<ExamAssignmentListResponse> => {
@@ -51,7 +63,13 @@ export const examsApi = {
     return response.data;
   },
 
-  // Student specific endpoints
+  getExamStudents: async (id: string): Promise<StudentForAssignmentList> => {
+    const response = await apiClient.get<StudentForAssignmentList>(`/exams/${id}/students`);
+    return response.data;
+  },
+
+  // ── Student ──────────────────────────────────────────────────────────────
+
   studentListExams: async (skip: number = 0, limit: number = 100): Promise<ExamListResponse> => {
     const response = await apiClient.get<ExamListResponse>(`/student/exams?skip=${skip}&limit=${limit}`);
     return response.data;

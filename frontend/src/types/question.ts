@@ -31,7 +31,33 @@ export interface QuestionBase {
   is_active: boolean;
 }
 
-export interface QuestionCreate extends QuestionBase {
+export interface QuestionCreate {
+  exam_id: string;
+  question_text: string;
+  question_type: QuestionType;
+  marks: number;
+  negative_marks?: number;
+  difficulty: Difficulty;
+  image_url?: string;
+  explanation?: string;
+  is_required?: boolean;
+  is_active?: boolean;
+  // order_number intentionally omitted — backend auto-assigns
+  options?: QuestionOptionCreate[];
+  correct_answer?: boolean; // for true_false
+}
+
+export interface QuestionUpdate {
+  question_text?: string;
+  question_type?: QuestionType;
+  marks?: number;
+  negative_marks?: number;
+  difficulty?: Difficulty;
+  image_url?: string;
+  explanation?: string;
+  order_number?: number;
+  is_required?: boolean;
+  is_active?: boolean;
   options?: QuestionOptionCreate[];
   correct_answer?: boolean;
 }

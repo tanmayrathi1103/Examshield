@@ -58,3 +58,29 @@ class AssignmentStatus(str, enum.Enum):
     SUBMITTED = "submitted"
     ABSENT = "absent"
     EXEMPTED = "exempted"
+
+class AttemptStatus(str, enum.Enum):
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
+    SUBMITTED = "submitted"
+    AUTO_SUBMITTED = "auto_submitted"
+    EVALUATED = "evaluated"
+    UNDER_REVIEW = "under_review"
+
+class AttemptEventType(str, enum.Enum):
+    STARTED = "started"
+    RESUMED = "resumed"
+    PAUSED = "paused"
+    SUBMITTED = "submitted"
+    AUTO_SUBMITTED = "auto_submitted"
+    # Future AI events
+    FACE_MISMATCH = "face_mismatch"
+    MULTIPLE_FACES = "multiple_faces"
+    NO_FACE = "no_face"
+    PHONE_DETECTED = "phone_detected"
+    VOICE_DETECTED = "voice_detected"
+    LOOKING_AWAY = "looking_away"
+    TAB_SWITCH = "tab_switch"
+    FULLSCREEN_EXIT = "fullscreen_exit"
+    NETWORK_DISCONNECT = "network_disconnect"

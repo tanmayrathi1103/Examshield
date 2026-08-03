@@ -30,7 +30,9 @@ export const useQuestions = () => {
       setQuestions(prev => [...prev, newQuestion]);
       return newQuestion;
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create question');
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 'Failed to create question';
+      setError(msg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -66,6 +68,21 @@ export const useQuestions = () => {
     }
   }, []);
 
+  const duplicateQuestion = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const duplicated = await questionsApi.duplicateQuestion(id);
+      setQuestions(prev => [...prev, duplicated]);
+      return duplicated;
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to duplicate question');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return {
     questions,
     isLoading,
@@ -73,6 +90,7 @@ export const useQuestions = () => {
     fetchQuestionsForExam,
     createQuestion,
     updateQuestion,
-    deleteQuestion
+    deleteQuestion,
+    duplicateQuestion,
   };
 };

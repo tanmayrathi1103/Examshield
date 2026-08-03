@@ -1,6 +1,6 @@
 import apiClient from './axios';
-import type { 
-  QuestionResponse, QuestionCreate, QuestionUpdate, QuestionListResponse 
+import type {
+  QuestionResponse, QuestionCreate, QuestionUpdate, QuestionListResponse
 } from '../types';
 
 export const questionsApi = {
@@ -27,7 +27,7 @@ export const questionsApi = {
     const response = await apiClient.post<QuestionResponse>(`/questions/${id}/duplicate`);
     return response.data;
   },
-  
+
   listQuestionsForExam: async (examId: string, skip: number = 0, limit: number = 100): Promise<QuestionListResponse> => {
     const response = await apiClient.get<QuestionListResponse>(`/exams/${examId}/questions?skip=${skip}&limit=${limit}`);
     return response.data;
