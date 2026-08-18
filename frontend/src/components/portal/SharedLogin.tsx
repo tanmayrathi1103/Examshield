@@ -14,7 +14,7 @@ interface SharedLoginProps {
 const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
   const { login, logout, isLoading, error: authError } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('');̦̦
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
