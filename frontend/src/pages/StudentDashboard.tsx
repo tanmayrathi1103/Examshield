@@ -114,12 +114,19 @@ const StudentDashboard: React.FC = () => {
 
                   {/* Action Button */}
                   <div className="mt-auto pt-2">
-                    {statusCfg.canStart ? (
+                    {exam.student_attempt_status && ['submitted', 'auto_submitted', 'evaluated'].includes(exam.student_attempt_status) ? (
+                      <button
+                        onClick={() => exam.student_attempt_id ? navigate(`/student/exam/${exam.id}/result?attemptId=${exam.student_attempt_id}`) : undefined}
+                        className="w-full py-3 bg-emerald-100 text-emerald-700 font-bold rounded-xl text-sm flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4" /> Completed (View Result)
+                      </button>
+                    ) : statusCfg.canStart ? (
                       <button
                         onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}
                         className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/10 hover:-translate-y-0.5"
                       >
-                        <Play className="w-4 h-4" /> Start Exam
+                        <Play className="w-4 h-4" /> {exam.student_attempt_status && ['in_progress', 'paused'].includes(exam.student_attempt_status) ? 'Resume Exam' : 'Start Exam'}
                       </button>
                     ) : exam.start_time && new Date(exam.start_time) > new Date() ? (
                       <button

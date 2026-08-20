@@ -7,6 +7,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.exams import router as exams_router, student_router as student_exams_router
 from app.api.v1.questions import router as questions_router, exam_questions_router
 from app.api.v1.student_attempts import router as student_attempts_router
+from app.api.v1.reports import router as reports_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -31,6 +32,7 @@ app.include_router(student_exams_router, prefix="/api/v1")
 app.include_router(questions_router, prefix="/api/v1")
 app.include_router(exam_questions_router, prefix="/api/v1")
 app.include_router(student_attempts_router, prefix="/api/v1/student")
+app.include_router(reports_router, prefix="/api/v1/exams", tags=["Reports"])
 
 @app.on_event("startup")
 def startup_event():

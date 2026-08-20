@@ -35,6 +35,8 @@ import CreateExam from './pages/CreateExam';
 import LiveMonitoring from './pages/LiveMonitoring';
 import StudentReports from './pages/StudentReports';
 import ManageExam from './pages/ManageExam';
+import FacultyExamReport from './pages/FacultyExamReport';
+import StudentDetailReport from './pages/StudentDetailReport';
 
 // Admin Pages
 import AdminDashboard from './pages/AdminDashboard';
@@ -104,6 +106,8 @@ function App() {
             <Route path="faculty/questions" element={<QuestionBank />} />
             <Route path="faculty/create-exam" element={<CreateExam />} />
             <Route path="faculty/manage-exam/:examId" element={<ManageExam />} />
+            <Route path="faculty/exams/:examId/report" element={<FacultyExamReport />} />
+            <Route path="faculty/exams/:examId/report/student/:studentId" element={<StudentDetailReport />} />
             <Route path="faculty/live-monitoring" element={<LiveMonitoring />} />
             <Route path="faculty/student-reports" element={<StudentReports />} />
 
