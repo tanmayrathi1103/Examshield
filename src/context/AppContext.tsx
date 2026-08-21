@@ -3,10 +3,14 @@ import {
   type Exam, type Question, type Student, type Faculty, type ViolationLog, type AuditLog,
   mockExams, mockQuestions, mockStudents, mockFaculty, mockViolations, mockAuditLogs, mockAIConfig 
 } from '../data/mockData';
+import type { User } from '../types';
 
 interface AppContextType {
+  currentUser: User | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
+  isAuthenticated: boolean;
+  setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
   userRole: 'student' | 'faculty' | 'admin' | 'guest';
-  setUserRole: (role: 'student' | 'faculty' | 'admin' | 'guest') => void;
   exams: Exam[];
   setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
   questions: Question[];
@@ -55,7 +59,11 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [userRole, setUserRole] = useState<'student' | 'faculty' | 'admin' | 'guest'>('guest');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const userRole = currentUser?.role || 'guest';
+  
+  // Temporary mock states for incremental migration
   const [exams, setExams] = useState<Exam[]>(mockExams);
   const [questions, setQuestions] = useState<Question[]>(mockQuestions);
   const [students, setStudents] = useState<Student[]>(mockStudents);
@@ -63,6 +71,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [violations, setViolations] = useState<ViolationLog[]>(mockViolations);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(mockAuditLogs);
   const [aiConfig, setAiConfig] = useState(mockAIConfig);
+
+
 
   // Student specific exam states
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
@@ -83,7 +93,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addViolation = (type: ViolationLog['type'], severity: ViolationLog['severity']) => {
     const newViolation: ViolationLog = {
       id: `v_${Date.now()}`,
-      studentName: 'Tanmay Rathi', // Simulated logged in student
+      studentName: currentUser?.full_name || 'Simulated Student',
       examTitle: exams.find(e => e.id === activeExamId)?.title || 'General Examination',
       timestamp: new Date().toISOString(),
       type,
@@ -91,23 +101,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resolved: false
     };
     setViolations(prev => [newViolation, ...prev]);
-
-    // Dynamically deduct integrity score for the simulated student
-    setStudents(prev => 
-      prev.map(s => {
-        if (s.name === 'Tanmay Rathi') {
-          const deduction = severity === 'high' ? 15 : severity === 'medium' ? 8 : 4;
-          return { ...s, integrityScore: Math.max(0, s.integrityScore - deduction) };
-        }
-        return s;
-      })
-    );
   };
 
   const addAuditLog = (action: string) => {
     const newLog: AuditLog = {
       id: `a_${Date.now()}`,
-      user: userRole === 'admin' ? 'admin@examshield.ai' : 'harsh.dhawale@examshield.ai',
+      user: currentUser?.email || 'unknown',
       action,
       timestamp: new Date().toISOString(),
       ip: '192.168.1.100'
@@ -125,7 +124,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      userRole, setUserRole,
+      currentUser, setCurrentUser,
+      isAuthenticated, setIsAuthenticated,
+      userRole,
       exams, setExams,
       questions, setQuestions,
       students, setStudents,

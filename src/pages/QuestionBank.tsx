@@ -1,11 +1,46 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useExams } from '../hooks/useExams';
+import { useQuestions } from '../hooks/useQuestions';
 import { PlusCircle, Search, Trash2, HelpCircle } from 'lucide-react';
+import type { QuestionCreate, QuestionType, Difficulty } from '../types';
+import { useApp } from '../context/AppContext';
+import { examsApi } from '../api/exams';
+import { authApi } from '../api/auth';
 
 const QuestionBank: React.FC = () => {
-  const { questions, setQuestions, addAuditLog } = useApp();
+  const [searchParams] = useSearchParams();
+  const examIdParam = searchParams.get('examId');
+  const { exams, fetchExams, publishExam } = useExams();
+  const { questions, fetchQuestionsForExam, createQuestion, deleteQuestion, isLoading } = useQuestions();
+  const { addAuditLog } = useApp();
+  
+  const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [searchText, setSearchText] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Fetch exams on mount
+  useEffect(() => {
+    fetchExams();
+  }, [fetchExams]);
+
+  // Fetch questions when exam selected
+  useEffect(() => {
+    if (selectedExamId) {
+      fetchQuestionsForExam(selectedExamId);
+    }
+  }, [selectedExamId, fetchQuestionsForExam]);
+
+  // Set default exam selection
+  useEffect(() => {
+    if (exams.length > 0) {
+      if (examIdParam && exams.some(e => e.id === examIdParam)) {
+        setSelectedExamId(examIdParam);
+      } else if (!selectedExamId) {
+        setSelectedExamId(exams[0].id);
+      }
+    }
+  }, [exams, examIdParam, selectedExamId]);
 
   // New question form inputs
   const [text, setText] = useState('');
@@ -14,32 +49,49 @@ const QuestionBank: React.FC = () => {
   const [opt2, setOpt2] = useState('');
   const [opt3, setOpt3] = useState('');
   const [correctOption, setCorrectOption] = useState(0);
-  const [points, setPoints] = useState(2);
+  const [points, setPoints] = useState(1);
 
-  const handleAddQuestion = (e: React.FormEvent) => {
+  const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newQ = {
-      id: `q_${Date.now()}`,
-      text,
-      options: [opt0, opt1, opt2, opt3],
-      correctOption,
-      points
+    if (!selectedExamId) return;
+
+    const newQ: QuestionCreate = {
+      exam_id: selectedExamId,
+      question_text: text,
+      question_type: 'mcq',
+      marks: points,
+      difficulty: 'medium',
+      options: [
+        { option_text: opt0, is_correct: correctOption === 0, display_order: 1 },
+        { option_text: opt1, is_correct: correctOption === 1, display_order: 2 },
+        { option_text: opt2, is_correct: correctOption === 2, display_order: 3 },
+        { option_text: opt3, is_correct: correctOption === 3, display_order: 4 },
+      ]
     };
-    setQuestions(prev => [...prev, newQ]);
-    addAuditLog(`Created Question: "${text.substring(0, 30)}..."`);
-    
-    // Reset form
-    setText(''); setOpt0(''); setOpt1(''); setOpt2(''); setOpt3(''); setCorrectOption(0); setPoints(2);
-    setShowAddForm(false);
+
+    try {
+      await createQuestion(newQ);
+      addAuditLog(`Created Question for exam: ${selectedExamId}`);
+      
+      // Reset form
+      setText(''); setOpt0(''); setOpt1(''); setOpt2(''); setOpt3(''); setCorrectOption(0); setPoints(1);
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Failed to create question', err);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setQuestions(prev => prev.filter(q => q.id !== id));
-    addAuditLog(`Deleted Question ID: ${id}`);
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteQuestion(id);
+      addAuditLog(`Deleted Question ID: ${id}`);
+    } catch (err) {
+      console.error('Failed to delete question', err);
+    }
   };
 
   const filteredQuestions = questions.filter(q => 
-    q.text.toLowerCase().includes(searchText.toLowerCase())
+    q.question_text.toLowerCase().includes(searchText.toLowerCase())
   );
 
   return (
@@ -49,13 +101,70 @@ const QuestionBank: React.FC = () => {
           <h1 className="text-3xl font-extrabold text-slate-800">Faculty Question Bank</h1>
           <p className="text-slate-500">Configure questions to be used during assessments.</p>
         </div>
-        <button 
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/10 transition-all"
-        >
-          <PlusCircle className="w-4 h-4" /> Add New Question
-        </button>
+        <div className="flex items-center gap-4">
+          <select 
+            value={selectedExamId}
+            onChange={(e) => setSelectedExamId(e.target.value)}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm"
+          >
+            <option value="" disabled>Select Assessment</option>
+            {exams.map(exam => (
+              <option key={exam.id} value={exam.id}>{exam.title}</option>
+            ))}
+          </select>
+
+          <button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            disabled={!selectedExamId}
+            className={`px-5 py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/10 transition-all ${!selectedExamId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}
+          >
+            <PlusCircle className="w-4 h-4" /> Add New Question
+          </button>
+        </div>
       </div>
+
+      {selectedExamId && (
+        <div className="flex gap-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl items-center justify-between">
+          <div className="text-sm text-indigo-800 font-bold">
+            Assessment Status: {exams.find(e => e.id === selectedExamId)?.status || 'draft'}
+          </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={async () => {
+                try {
+                  await publishExam(selectedExamId);
+                  alert('Assessment Published!');
+                } catch (e) {
+                  console.error(e);
+                  alert('Failed to publish');
+                }
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors"
+            >
+              Publish Assessment
+            </button>
+            <button 
+              onClick={async () => {
+                try {
+                  const students = await authApi.getStudents();
+                  if (!students.length) {
+                     alert("No students found.");
+                     return;
+                  }
+                  await examsApi.assignStudents(selectedExamId, students.map(s => s.id));
+                  alert(`Assigned ${students.length} students!`);
+                } catch (e) {
+                  console.error(e);
+                  alert('Failed to assign students');
+                }
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors"
+            >
+              Assign All Students
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Question Modal/Form */}
       {showAddForm && (
@@ -105,13 +214,13 @@ const QuestionBank: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Points</label>
-              <input type="number" value={points} onChange={(e) => setPoints(Number(e.target.value))} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold focus:outline-none focus:border-indigo-500" required />
+              <input type="number" value={points} onChange={(e) => setPoints(Number(e.target.value))} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold focus:outline-none focus:border-indigo-500" required min={1} />
             </div>
           </div>
 
           <div className="flex gap-4 justify-end">
             <button type="button" onClick={() => setShowAddForm(false)} className="px-5 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">Cancel</button>
-            <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/10">Save Question</button>
+            <button type="submit" disabled={isLoading} className={`px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/10 ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:bg-indigo-700'}`}>{isLoading ? 'Saving...' : 'Save Question'}</button>
           </div>
         </form>
       )}
@@ -131,19 +240,23 @@ const QuestionBank: React.FC = () => {
         </div>
 
         {/* List items */}
-        {filteredQuestions.length === 0 ? (
-          <div className="p-8 text-center italic text-slate-400">No questions found.</div>
+        {isLoading && filteredQuestions.length === 0 ? (
+          <div className="p-8 text-center italic text-slate-400">Loading questions...</div>
+        ) : !selectedExamId ? (
+          <div className="p-8 text-center italic text-slate-400">Select an assessment to view questions.</div>
+        ) : filteredQuestions.length === 0 ? (
+          <div className="p-8 text-center italic text-slate-400">No questions found for this assessment.</div>
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredQuestions.map((q) => (
               <div key={q.id} className="p-6 hover:bg-slate-50/50 transition-colors flex justify-between items-start gap-4">
                 <div className="space-y-3">
-                  <h4 className="font-bold text-slate-800 text-sm leading-relaxed">{q.text}</h4>
+                  <h4 className="font-bold text-slate-800 text-sm leading-relaxed">{q.question_text}</h4>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 font-semibold">
-                    {q.options.map((opt, i) => (
-                      <div key={i} className={`flex items-center gap-1.5 ${q.correctOption === i ? 'text-emerald-600 font-bold' : ''}`}>
+                    {q.options?.map((opt, i) => (
+                      <div key={i} className={`flex items-center gap-1.5 ${opt.is_correct ? 'text-emerald-600 font-bold' : ''}`}>
                         <span>{String.fromCharCode(65 + i)})</span>
-                        <span>{opt}</span>
+                        <span>{opt.option_text}</span>
                       </div>
                     ))}
                   </div>
@@ -151,7 +264,7 @@ const QuestionBank: React.FC = () => {
 
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] bg-slate-100 font-bold text-slate-500 px-2 py-0.5 rounded">
-                    {q.points} Pts
+                    {q.marks} Pts
                   </span>
                   <button onClick={() => handleDelete(q.id)} className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all">
                     <Trash2 className="w-4 h-4" />

@@ -7,6 +7,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.exams import router as exams_router, student_router as student_exams_router
 from app.api.v1.questions import router as questions_router, exam_questions_router
 from app.api.v1.student_attempts import router as student_attempts_router
+from app.api.v1.biometrics import router as biometrics_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,13 +20,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:4434"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(biometrics_router, prefix="/api/v1")
 app.include_router(exams_router, prefix="/api/v1")
 app.include_router(student_exams_router, prefix="/api/v1")
 app.include_router(questions_router, prefix="/api/v1")

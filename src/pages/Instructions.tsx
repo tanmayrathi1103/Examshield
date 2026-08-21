@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, ShieldCheck, CheckSquare, Square } from 'lucide-react';
+import { useExams } from '../hooks/useExams';
 
 const Instructions: React.FC = () => {
-  const { exams } = useApp();
+  const { currentExam, fetchExamById, isLoading } = useExams();
   const [agreed, setAgreed] = useState(false);
   const navigate = useNavigate();
+  const { examId: paramExamId } = useParams<{ examId: string }>();
   const [searchParams] = useSearchParams();
-  const examId = searchParams.get('examId');
-
-  const exam = exams.find(e => e.id === examId);
+  const examId = paramExamId || searchParams.get('examId');
 
   useEffect(() => {
     if (!examId) {
       navigate('/student/dashboard');
+      return;
     }
-  }, [examId, navigate]);
+    fetchExamById(examId, true);
+  }, [examId, navigate, fetchExamById]);
+
+  const exam = currentExam;
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -30,9 +33,9 @@ const Instructions: React.FC = () => {
           <div className="text-xs font-bold text-indigo-600 uppercase">Assessment Details</div>
           <h2 className="text-xl font-extrabold text-slate-800">{exam?.title}</h2>
           <div className="flex gap-6 text-sm text-slate-400 mt-2 font-medium">
-            <span>Duration: {exam?.duration} minutes</span>
-            <span>Questions: {exam?.questionsCount} Items</span>
-            <span>Total Score: {exam ? exam.questionsCount * 2 : 0} Points</span>
+            <span>Duration: {exam?.duration_minutes} minutes</span>
+            <span>Total Marks: {exam?.total_marks}</span>
+            <span>Passing Marks: {exam?.passing_marks}</span>
           </div>
         </div>
 
@@ -90,7 +93,7 @@ const Instructions: React.FC = () => {
           <button 
             onClick={() => {
               if (agreed && examId) {
-                navigate(`/student/face-verification?examId=${examId}`);
+                navigate(`/student/exam/${examId}/face-verification`);
               }
             }}
             disabled={!agreed}

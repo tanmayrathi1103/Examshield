@@ -11,6 +11,8 @@ import { useAutoSave } from '../hooks/useAutoSave';
 import { useQuestionNavigation } from '../hooks/useQuestionNavigation';
 import { examsApi } from '../api/exams';
 import { questionsApi } from '../api/questions';
+import { useApp } from '../context/AppContext';
+import { useBiometrics } from '../hooks/useBiometrics';
 import type { ExamResponse, QuestionResponse } from '../types';
 
 const LiveExam: React.FC = () => {
@@ -24,7 +26,16 @@ const LiveExam: React.FC = () => {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [violations, setViolations] = useState<any[]>([]);
+
+  // App & Biometric hooks
+  const { addViolation, violations: globalViolations } = useApp();
+  const {
+    videoRef,
+    cameraActive,
+    startCamera,
+    stopCamera,
+    verifyFace
+  } = useBiometrics();
 
   // Real hooks
   const { attempt, setAttempt, startOrResume, submitAttempt } = useExamAttempt(examId || undefined, undefined);
@@ -57,6 +68,51 @@ const LiveExam: React.FC = () => {
     };
     init();
   }, [examId, navigate]); // Intentionally omitting startOrResume from deps to run once
+
+  // Webcam proctoring and face detection lifecycle
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
+
+  // Periodic active student detection check (every 7 seconds)
+  useEffect(() => {
+    if (!cameraActive || !exam) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await verifyFace(examId);
+        if (!response.verified) {
+          addViolation("Eye Deviation", "medium");
+        }
+      } catch (err: any) {
+        const errMsg = err.message || "";
+        if (errMsg.includes("No face detected")) {
+          addViolation("Face Missing", "high");
+        } else if (errMsg.includes("Multiple faces")) {
+          addViolation("Multiple Faces", "high");
+        } else {
+          addViolation("Eye Deviation", "low");
+        }
+      }
+    }, 7000);
+
+    return () => clearInterval(interval);
+  }, [cameraActive, verifyFace, examId, addViolation, exam]);
+
+  // Telemetry event listeners: tab switching (focus loss)
+  useEffect(() => {
+    const handleBlur = () => {
+      addViolation("Tab Switched", "high");
+    };
+
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [addViolation]);
 
   const {
     activeIndex,
@@ -142,7 +198,8 @@ const LiveExam: React.FC = () => {
   };
 
   const activeQuestion = questions[activeIndex];
-  const examViolationsCount = violations.length;
+  const examViolations = exam ? globalViolations.filter(v => v.examTitle === exam.title) : [];
+  const examViolationsCount = examViolations.length;
   const studentAnswersMap = new Map(attempt.answers.map(a => [a.question_id, a]));
   const answeredCount = attempt.answered_questions;
 
@@ -194,18 +251,35 @@ const LiveExam: React.FC = () => {
         
         {/* Left Side: Proctoring Feed Panel */}
         <div className="space-y-6 hidden lg:block">
-          {/* Simulated webcam */}
+          {/* Live webcam feed & detection status */}
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden relative shadow-lg">
-            <div className="aspect-video w-full bg-slate-950 flex items-center justify-center relative">
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                <div className="w-36 h-36 border-2 border-dashed border-emerald-500 rounded-full flex items-center justify-center relative animate-pulse">
-                  <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-emerald-500" />
-                  <div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-emerald-500" />
-                  <div className="absolute -top-1 px-1.5 py-0.5 bg-emerald-500 text-slate-950 text-[8px] font-bold rounded uppercase">
-                    Face Locked: 98%
+            <div className="aspect-video w-full bg-slate-950 flex items-center justify-center relative overflow-hidden">
+              {cameraActive ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover transform -scale-x-100"
+                />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-slate-400">
+                  <Video className="w-8 h-8 animate-pulse text-slate-500 mb-2" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Activating Proctor Feed...</span>
+                </div>
+              )}
+
+              {/* Dynamic Overlay HUD guides on top of video or placeholder */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-4 pointer-events-none">
+                <div className="w-32 h-32 border-2 border-dashed border-emerald-500/60 rounded-full flex items-center justify-center relative animate-pulse">
+                  <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-emerald-500/40" />
+                  <div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-emerald-500/40" />
+                  <div className="absolute -top-1.5 px-1.5 py-0.5 bg-emerald-500 text-slate-950 text-[8px] font-black rounded uppercase tracking-wider">
+                    Face Locked
                   </div>
                 </div>
               </div>
+
               <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold text-slate-300">
                 PROCTOR FEED • LIVE
               </div>
@@ -218,7 +292,7 @@ const LiveExam: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-750">
                 <Video className="w-4 h-4 text-emerald-400" />
-                <div><div className="text-[10px] text-slate-400 uppercase">Face Count</div><div className="text-slate-200">1 Detected</div></div>
+                <div><div className="text-[10px] text-slate-400 uppercase">Face Count</div><div className="text-slate-200">{cameraActive ? "1 Detected" : "0 Detected"}</div></div>
               </div>
             </div>
           </div>
@@ -226,9 +300,22 @@ const LiveExam: React.FC = () => {
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5 space-y-4">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-700/50 pb-2 flex justify-between items-center">
               <span>Proctoring Alert log</span>
-              <span className="text-[10px] px-2 py-0.5 rounded font-black bg-emerald-500/20 text-emerald-400">0 Warnings</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-black ${examViolations.length > 0 ? 'bg-rose-500/20 text-rose-400 animate-pulse' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                {examViolations.length} Warnings
+              </span>
             </h3>
-            <div className="text-xs text-slate-400 italic">No behavioral incidents flagged. Academic integrity secure.</div>
+            {examViolations.length === 0 ? (
+              <div className="text-xs text-slate-400 italic">No behavioral incidents flagged. Academic integrity secure.</div>
+            ) : (
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                {examViolations.map((v) => (
+                  <div key={v.id} className="p-2 bg-slate-900/60 rounded-lg border border-slate-750 text-[10px] flex justify-between items-center text-slate-350">
+                    <span className="font-bold text-rose-400">{v.type}</span>
+                    <span>{new Date(v.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

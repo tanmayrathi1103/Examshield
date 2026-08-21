@@ -1,14 +1,16 @@
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+random_email = f"testuser_{uuid.uuid4().hex[:8]}@example.com"
 
 def test_register_user():
     response = client.post("/api/v1/auth/register", json={
         "full_name": "Test User",
-        "email": "testuser@example.com",
-        "phone_number": "1234567890",
+        "email": random_email,
+        "phone_number": f"123456{uuid.uuid4().hex[:4]}",
         "password": "StrongPassword123!",
         "role": "student"
     })
@@ -20,9 +22,10 @@ def test_register_user():
 
 def test_login_invalid_password():
     response = client.post("/api/v1/auth/login", json={
-        "email": "testuser@example.com",
+        "email": random_email,
         "password": "wrongpassword"
     })
     if response.status_code != 500:
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid email or password"
+

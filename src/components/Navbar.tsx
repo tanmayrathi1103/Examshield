@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Bell, User, Laptop, Shield, PlayCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { Bell, User, Laptop, Shield, PlayCircle, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
-  const { userRole, setUserRole, addViolation, activeExamId } = useApp();
+  const { currentUser, userRole, addViolation, activeExamId } = useApp();
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const [showSim, setShowSim] = useState(false);
-
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const role = e.target.value as any;
-    setUserRole(role);
-    if (role === 'student') navigate('/student/dashboard');
-    else if (role === 'faculty') navigate('/faculty/dashboard');
-    else if (role === 'admin') navigate('/admin/dashboard');
-    else navigate('/');
-  };
-
   return (
     <header className="glass h-16 px-6 border-b border-slate-200/80 flex items-center justify-between sticky top-0 z-40 bg-white/80">
       <div className="flex items-center gap-4">
@@ -24,20 +16,6 @@ const Navbar: React.FC = () => {
           {userRole} Portal
         </h2>
 
-        {/* Quick Role Switcher */}
-        <div className="flex items-center gap-2 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200">
-          <span className="text-xs text-slate-500 font-semibold uppercase">Role Selector:</span>
-          <select
-            value={userRole}
-            onChange={handleRoleChange}
-            className="text-sm font-semibold bg-transparent border-none focus:outline-none text-indigo-600 cursor-pointer"
-          >
-            <option value="student">Student (Tanmay)</option>
-            <option value="faculty">Faculty (Dr. Harsh)</option>
-            <option value="admin">Administrator</option>
-            <option value="guest">Guest / Logout</option>
-          </select>
-        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -99,15 +77,25 @@ const Navbar: React.FC = () => {
         <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
           <div className="text-right hidden sm:block">
             <div className="text-sm font-bold text-slate-800">
-              {userRole === 'student' && 'Tanmay Rathi'}
-              {userRole === 'faculty' && 'Dr. Harsh Dhawale'}
-              {userRole === 'admin' && 'System Admin'}
+              {currentUser?.full_name || 'User'}
             </div>
             <div className="text-xs text-slate-400 font-medium capitalize">{userRole}</div>
           </div>
           <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
             {userRole.charAt(0).toUpperCase()}
           </div>
+          
+          {/* Logout Button */}
+          <button 
+            onClick={async () => {
+              await logout();
+              navigate('/login');
+            }}
+            className="ml-2 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all"
+            title="Logout"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </header>

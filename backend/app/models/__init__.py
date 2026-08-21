@@ -9,3 +9,4 @@ from app.models.question import Question, QuestionOption
 from app.models.exam_attempt import ExamAttempt
 from app.models.student_answer import StudentAnswer
 from app.models.attempt_event import AttemptEvent
+from app.models.student_biometric import StudentBiometric, BiometricVerificationLog, BiometricRateLimit

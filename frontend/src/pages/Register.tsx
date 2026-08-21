@@ -39,7 +39,8 @@ const Register: React.FC = () => {
     }
   };
 
-  const displayError = error || authError;
+  const rawError = error || authError;
+  const displayError = typeof rawError === 'object' && rawError !== null ? JSON.stringify(rawError) : rawError;
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-6 py-12 relative overflow-hidden bg-slate-50">

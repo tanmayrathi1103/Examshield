@@ -26,3 +26,4 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     faculty_profile = relationship("FacultyProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     admin_profile = relationship("AdminProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    biometrics = relationship("StudentBiometric", back_populates="user", cascade="all, delete-orphan")

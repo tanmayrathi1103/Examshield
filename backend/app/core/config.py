@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "supersecretkey"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    BIOMETRIC_ENCRYPTION_KEY: str = "DjHY5zYAg_wK0hND2jo0xYvJdZi2_KR1_ah5cNguUxM="
+    BIOMETRIC_KEY_VERSION: str = "v1"
+    
+    # Biometric Parameters
+    BIOMETRIC_MATCH_THRESHOLD: float = 0.60
+    BIOMETRIC_MAX_VERIFY_ATTEMPTS: int = 5
+    BIOMETRIC_MAX_REGISTER_ATTEMPTS: int = 3
     
     # Database
     DATABASE_URL: str

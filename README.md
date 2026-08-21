@@ -30,3 +30,11 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Biometric Facial Recognition Flow (Simplified)
+
+### ⚠️ Security & Design Tradeoffs (Intentional Simplicity)
+1. **Raw Image Storage (Encrypted at Rest)**: Instead of storing only abstract face embedding vectors, the system captures and stores the student's raw base64 webcam image (encrypted via AES-256 Fernet) in the database.
+2. **On-Demand Embedding Extraction & Cosine Similarity**: DeepFace (using the FaceNet model) extracts the face embeddings from the decrypted raw images *on the fly* during verification to compare them against the live capture.
+3. **No Liveness / Anti-Spoofing Checks**: The liveness checking state machine (head turns, blinking) has been completely removed to prioritize system simplicity and reliability. As a result, **spoofing is possible** (e.g., using printed photos or a photo shown on another screen). This is an intentional simplicity tradeoff.
+4. **GDPR-Compliant Right to Erasure**: When a student requests data deletion, the database record is not just soft-deleted: the `encrypted_embedding` and `encrypted_audit_image` columns are overwritten with empty payloads (`""` and `None` respectively) to purge all image data.
