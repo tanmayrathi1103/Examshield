@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './Button';
 
@@ -26,6 +26,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isLoading = false,
 }) => {
   const [typedText, setTypedText] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setTypedText('');
+    }
+  }, [isOpen, requireTypedConfirmation]);
 
   if (!isOpen) return null;
 

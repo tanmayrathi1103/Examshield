@@ -233,6 +233,7 @@ class AttemptService:
         return attempt
 
     def _evaluate_attempt(self, attempt: ExamAttempt):
+        from app.services.evaluation_service import EvaluationService
         # Fetch all questions for this exam
         questions = {
             q.id: q for q in self.db.scalars(
@@ -246,16 +247,11 @@ class AttemptService:
 
         for answer in attempt.answers:
             q = questions.get(answer.question_id)
-            if not q or not answer.is_answered:
+            if not q:
                 continue
 
-            if q.question_type in [QuestionType.MCQ, QuestionType.TRUE_FALSE]:
-                if answer.selected_option:
-                    correct_opts = [opt.option_text for opt in q.options if opt.is_correct]
-                    if answer.selected_option in correct_opts:
-                        score += q.marks
-                    else:
-                        score -= (q.negative_marks or 0.0)
+            status, marks = EvaluationService.evaluate_answer(answer, q)
+            score += marks
 
         attempt.score = score
         total_possible = sum(q.marks for q in questions.values())

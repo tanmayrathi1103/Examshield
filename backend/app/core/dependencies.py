@@ -67,3 +67,8 @@ def get_current_student(current_user: User = Depends(get_active_user)) -> User:
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
+
+def require_staff(current_user: User = Depends(get_active_user)) -> User:
+    if current_user.role not in (UserRole.ADMIN, UserRole.FACULTY):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
+    return current_user

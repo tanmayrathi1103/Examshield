@@ -27,6 +27,8 @@ export interface ExamResponse extends ExamBase {
   created_by: string;
   created_at: string;
   updated_at: string;
+  student_attempt_status?: string;
+  student_attempt_id?: string;
 }
 
 export interface ExamListResponse {

@@ -8,6 +8,7 @@ from app.core.dependencies import get_db, get_current_faculty, get_current_stude
 from app.models.user import User
 from app.schemas.exam import (
     ExamCreate, ExamUpdate, ExamResponse, ExamListResponse,
+    StudentExamListResponse,
     ExamAssignmentCreate, ExamAssignmentResponse, ExamAssignmentListResponse,
     StudentForAssignment, StudentForAssignmentList, ExamStatsResponse
 )
@@ -168,7 +169,7 @@ def get_exam_students(
 student_router = APIRouter(prefix="/student/exams", tags=["Student Exams"])
 
 
-@student_router.get("", response_model=ExamListResponse)
+@student_router.get("", response_model=StudentExamListResponse)
 def student_list_exams(
     skip: int = 0, limit: int = 100,
     db: Session = Depends(get_db),

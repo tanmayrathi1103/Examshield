@@ -127,7 +127,7 @@ const LiveExam: React.FC = () => {
   const handleExpire = async () => {
     if (attempt?.status === 'in_progress' || attempt?.status === 'paused') {
       await submitAttempt();
-      navigate(`/student/exam-result?attemptId=${attempt?.id}`);
+      navigate(`/student/exam/${examId}/result?attemptId=${attempt?.id}`);
     }
   };
 
@@ -142,13 +142,44 @@ const LiveExam: React.FC = () => {
   }
 
   if (error || !exam || !attempt) {
+    const isAlreadyCompleted = error && (error.includes("already submitted") || error.includes("already auto_submitted") || error.includes("already evaluated"));
+    
+    if (isAlreadyCompleted) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-6">
+          <div className="bg-slate-800/50 border border-slate-700 p-8 rounded-3xl text-center space-y-6 max-w-md w-full backdrop-blur-md">
+            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-white">Exam Already Completed</h2>
+              <p className="text-slate-400 text-sm">You have already submitted this examination and cannot retake it.</p>
+            </div>
+            <div className="flex flex-col gap-3 pt-4">
+              <button 
+                onClick={() => navigate('/student/dashboard')} 
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl text-sm transition-colors"
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-        <div className="text-center space-y-4">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-6">
+        <div className="bg-slate-800/50 border border-slate-700 p-8 rounded-3xl text-center space-y-6 max-w-md w-full backdrop-blur-md">
           <AlertTriangle className="w-16 h-16 text-rose-500 mx-auto" />
-          <h2 className="text-2xl font-bold">Error Loading Exam</h2>
-          <p className="text-slate-400">{error || "Attempt could not be initialized"}</p>
-          <button onClick={() => navigate('/student/dashboard')} className="px-6 py-2 bg-indigo-600 rounded-lg">Return to Dashboard</button>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight text-white">Error Loading Exam</h2>
+            <p className="text-slate-400 text-sm">{error || "Attempt could not be initialized"}</p>
+          </div>
+          <button 
+            onClick={() => navigate('/student/dashboard')} 
+            className="w-full py-3 bg-slate-700 hover:bg-slate-600 font-bold rounded-xl text-sm transition-colors"
+          >
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );
@@ -186,7 +217,7 @@ const LiveExam: React.FC = () => {
   const handleSubmitExam = async () => {
     setShowSubmitModal(false);
     await submitAttempt();
-    navigate(`/student/exam-result?attemptId=${attempt.id}`);
+    navigate(`/student/exam/${examId}/result?attemptId=${attempt.id}`);
   };
 
   const handleExitFullscreen = () => {
@@ -212,7 +243,7 @@ const LiveExam: React.FC = () => {
       {/* Header bar */}
       <header className="flex justify-between items-center py-4 px-6 bg-slate-800/40 border border-slate-700/50 rounded-2xl mb-6 backdrop-blur-md">
         <div>
-          <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest">{exam.course_code || 'EXAM'}</div>
+          <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest">{exam.exam_code || 'EXAM'}</div>
           <h2 className="text-lg font-bold tracking-tight text-white">{exam.title}</h2>
         </div>
         

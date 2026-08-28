@@ -58,6 +58,29 @@ export const examsApi = {
     await apiClient.delete(`/exams/${examId}/students/${studentId}`);
   },
 
+  // ── Reports ──────────────────────────────────────────────────────────────
+
+  getExamReportSummary: async (examId: string) => {
+    const response = await apiClient.get(`/exams/${examId}/report`);
+    return response.data;
+  },
+
+  getExamStudentsReport: async (examId: string) => {
+    const response = await apiClient.get(`/exams/${examId}/report/students`);
+    return response.data;
+  },
+
+  getStudentDetailReport: async (examId: string, studentId: string) => {
+    const response = await apiClient.get(`/exams/${examId}/report/students/${studentId}`);
+    return response.data;
+  },
+
+  getQuestionAnalytics: async (examId: string) => {
+    const response = await apiClient.get(`/exams/${examId}/report/questions`);
+    return response.data;
+  },
+
+
   getAssignments: async (id: string, skip: number = 0, limit: number = 100): Promise<ExamAssignmentListResponse> => {
     const response = await apiClient.get<ExamAssignmentListResponse>(`/exams/${id}/assignments?skip=${skip}&limit=${limit}`);
     return response.data;

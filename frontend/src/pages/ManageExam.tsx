@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Eye, Send, Users, Trash2, Clock, BookOpen,
   CheckCircle, AlertCircle, Edit3, Copy, X, Check, FileText, Award, Calendar,
-  Settings, PenTool, LayoutTemplate
+  Settings, PenTool, LayoutTemplate, BarChart2
 } from 'lucide-react';
 import { useExams } from '../hooks/useExams';
 import { useQuestions } from '../hooks/useQuestions';
@@ -310,6 +310,15 @@ const ManageExam: React.FC = () => {
                <CheckCircle className="w-4 h-4" />
                {exam.status === 'active' ? 'Published & Active' : 'Scheduled'}
              </div>
+          )}
+          {isPublished && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/faculty/exams/${exam.id}/report`)}
+              leftIcon={<BarChart2 className="w-4 h-4" />}
+            >
+              View Report
+            </Button>
           )}
           <Button 
             variant="danger" 

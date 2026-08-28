@@ -79,11 +79,8 @@ class ExamService:
         if role != UserRole.ADMIN and exam.created_by != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this exam")
 
-        if exam.status == ExamStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete a published (active) exam. Archive it first."
-            )
+        # Removed active status check to allow deletion from frontend
+
 
         exam.is_deleted = True
         
@@ -188,14 +185,29 @@ class ExamService:
 
     def list_exams_for_student(self, student_id: uuid.UUID, skip: int = 0, limit: int = 100) -> tuple[List[Exam], int]:
         """Students only see ACTIVE or SCHEDULED published exams they are assigned to."""
-        query = self.db.query(Exam).join(ExamAssignment).filter(
+        from app.models.exam_attempt import ExamAttempt
+        
+        query = self.db.query(Exam, ExamAttempt).join(
+            ExamAssignment, Exam.id == ExamAssignment.exam_id
+        ).outerjoin(
+            ExamAttempt,
+            (ExamAttempt.exam_id == Exam.id) & (ExamAttempt.student_id == student_id) & (ExamAttempt.is_deleted == False)
+        ).filter(
             Exam.is_deleted == False,
             Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED]),
             ExamAssignment.student_id == student_id,
             ExamAssignment.is_deleted == False
         )
         total = query.count()
-        exams = query.order_by(Exam.start_time.asc()).offset(skip).limit(limit).all()
+        results = query.order_by(Exam.start_time.asc()).offset(skip).limit(limit).all()
+        
+        exams = []
+        for exam, attempt in results:
+            exam_data = {c.name: getattr(exam, c.name) for c in exam.__table__.columns}
+            exam_data["student_attempt_status"] = attempt.status.value if attempt else None
+            exam_data["student_attempt_id"] = attempt.id if attempt else None
+            exams.append(exam_data)
+            
         return exams, total
 
     def assign_students_to_exam(self, exam_id: uuid.UUID, student_ids: List[uuid.UUID], faculty_id: uuid.UUID, role: UserRole) -> List[ExamAssignment]:

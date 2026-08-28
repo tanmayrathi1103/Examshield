@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, validator, model_validator
 from datetime import datetime
 from typing import Optional, List, Any, Dict
 import uuid
-from app.core.enums import ExamStatus, AssignmentStatus
+from app.core.enums import ExamStatus, AssignmentStatus, AttemptStatus
 
 
 class ExamBase(BaseModel):
@@ -30,6 +30,13 @@ class ExamBase(BaseModel):
                 raise ValueError('end_time must be strictly after start_time')
         return self
 
+    @validator('start_time', 'end_time', pre=False)
+    def make_naive_utc(cls, v):
+        if v and v.tzinfo:
+            from datetime import timezone
+            v = v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
+
     @validator('exam_code')
     def normalize_exam_code(cls, v):
         return v.strip().upper()
@@ -50,6 +57,13 @@ class ExamUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     status: Optional[ExamStatus] = None
+
+    @validator('start_time', 'end_time', pre=False)
+    def make_naive_utc(cls, v):
+        if v and v.tzinfo:
+            from datetime import timezone
+            v = v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class ExamResponse(ExamBase):
@@ -78,6 +92,15 @@ class ExamResponse(ExamBase):
 
 class ExamListResponse(BaseModel):
     items: List[ExamResponse]
+    total: int
+
+
+class StudentExamResponse(ExamResponse):
+    student_attempt_status: Optional[AttemptStatus] = None
+    student_attempt_id: Optional[uuid.UUID] = None
+
+class StudentExamListResponse(BaseModel):
+    items: List[StudentExamResponse]
     total: int
 
 
