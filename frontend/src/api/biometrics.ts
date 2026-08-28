@@ -1,4 +1,4 @@
-import apiClient from './axios';
+import apiClient, { biometricApiClient } from './axios';
 import type {
   BiometricRegisterRequest,
   BiometricRegisterResponse,
@@ -10,12 +10,14 @@ import type {
 
 export const biometricApi = {
   register: async (payload: BiometricRegisterRequest): Promise<BiometricRegisterResponse> => {
-    const response = await apiClient.post<BiometricRegisterResponse>('/biometrics/register', payload);
+    // Uses 2-minute timeout — DeepFace FaceNet model inference can be slow on first call
+    const response = await biometricApiClient.post<BiometricRegisterResponse>('/biometrics/register', payload);
     return response.data;
   },
 
   verify: async (payload: BiometricVerifyRequest): Promise<BiometricVerifyResponse> => {
-    const response = await apiClient.post<BiometricVerifyResponse>('/biometrics/verify', payload);
+    // Uses 2-minute timeout — DeepFace FaceNet model inference can be slow on first call
+    const response = await biometricApiClient.post<BiometricVerifyResponse>('/biometrics/verify', payload);
     return response.data;
   },
 

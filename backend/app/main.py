@@ -51,6 +51,23 @@ def startup_event():
     except Exception as e:
         print(f"Database Connection Failed: {e}")
 
+    # Pre-warm DeepFace model in background to avoid slow first verification request
+    import os
+    if os.getenv("BYPASS_FACE_DETECTION", "false").lower() != "true":
+        import threading
+        def _prewarm_deepface():
+            try:
+                print("Pre-warming DeepFace FaceNet model (this may take a moment)...")
+                from deepface import DeepFace
+                import numpy as np
+                dummy = np.zeros((160, 160, 3), dtype=np.uint8)
+                DeepFace.represent(img_path=dummy, model_name="Facenet", enforce_detection=False)
+                print("DeepFace FaceNet model pre-warmed successfully.")
+            except Exception as e:
+                print(f"DeepFace pre-warm failed (non-critical): {e}")
+        threading.Thread(target=_prewarm_deepface, daemon=True).start()
+
+
 @app.get("/")
 def read_root():
     return {"message": "ExamShield Backend Running Successfully"}

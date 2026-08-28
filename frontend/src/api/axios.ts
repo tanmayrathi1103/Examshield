@@ -6,46 +6,49 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 // Centralized Axios Instance
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 30000, // 30s default
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request Interceptor
-apiClient.interceptors.request.use(
-  (config) => {
-    // Inject JWT token
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+// Higher timeout axios instance for biometric endpoints (DeepFace model inference is slow)
+export const biometricApiClient = axios.create({
+  baseURL: API_URL,
+  timeout: 120000, // 2 minutes for face recognition
+  headers: {
+    'Content-Type': 'application/json',
   },
-  (error) => Promise.reject(error)
-);
+});
 
-// Response Interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response) {
-      const { status } = error.response;
-      
-      // Global error handling
-      if (status === 401) {
-        // Unauthorized - token might be expired
-        localStorage.removeItem('access_token');
-        // Handle redirect or context reset elsewhere (e.g., in AppContext or useAuth)
-      } else if (status === 403) {
-        // Forbidden
-        console.error('Access forbidden');
-      }
-    } else if (error.request) {
-      console.error('Network Error / Connection Timeout');
-    }
-    return Promise.reject(error);
+// Request Interceptor (shared logic)
+const requestInterceptor = (config: any) => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+};
+
+apiClient.interceptors.request.use(requestInterceptor, (error) => Promise.reject(error));
+biometricApiClient.interceptors.request.use(requestInterceptor, (error) => Promise.reject(error));
+
+// Response Interceptor (shared logic)
+const responseErrorInterceptor = (error: any) => {
+  if (error.response) {
+    const { status } = error.response;
+    if (status === 401) {
+      localStorage.removeItem('access_token');
+    } else if (status === 403) {
+      console.error('Access forbidden');
+    }
+  } else if (error.request) {
+    console.error('Network Error / Connection Timeout');
+  }
+  return Promise.reject(error);
+};
+
+apiClient.interceptors.response.use((response) => response, responseErrorInterceptor);
+biometricApiClient.interceptors.response.use((response) => response, responseErrorInterceptor);
 
 export default apiClient;
