@@ -18,7 +18,7 @@ class AttemptService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_or_create_attempt(self, student_id: uuid.UUID, exam_id: uuid.UUID) -> ExamAttempt:
+    def get_or_create_attempt(self, student_id: uuid.UUID, exam_id: uuid.UUID, is_verification_step: bool = False) -> ExamAttempt:
         # Check if attempt already exists
         existing_attempt = self.db.scalars(
             select(ExamAttempt).where(
@@ -31,20 +31,46 @@ class AttemptService:
         ).first()
 
         if existing_attempt:
+            if not is_verification_step and not existing_attempt.face_verified:
+                raise ValueError("FACE_VERIFICATION_REQUIRED")
+
             # Resume logic
             if existing_attempt.status in [AttemptStatus.NOT_STARTED, AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED]:
                 if existing_attempt.expires_at and datetime.now(timezone.utc) >= existing_attempt.expires_at:
                     return self.auto_submit_attempt(existing_attempt.id)
 
-                existing_attempt.status = AttemptStatus.IN_PROGRESS
+                if existing_attempt.status == AttemptStatus.NOT_STARTED and not is_verification_step:
+                    now = datetime.now(timezone.utc)
+                    existing_attempt.status = AttemptStatus.IN_PROGRESS
+                    existing_attempt.started_at = now
+                    exam = self.db.get(Exam, existing_attempt.exam_id)
+                    if exam and exam.duration_minutes:
+                        expires_at = now + timedelta(minutes=exam.duration_minutes)
+                        if exam.end_time:
+                            end_time = exam.end_time
+                            if end_time.tzinfo is None:
+                                end_time = end_time.replace(tzinfo=timezone.utc)
+                            if expires_at > end_time:
+                                expires_at = end_time
+                        existing_attempt.expires_at = expires_at
 
-                # Log resume event
-                event = AttemptEvent(
-                    attempt_id=existing_attempt.id,
-                    event_type=AttemptEventType.RESUMED,
-                    event_data={"resumed_at": datetime.now(timezone.utc).isoformat()}
-                )
-                self.db.add(event)
+                    event = AttemptEvent(
+                        attempt_id=existing_attempt.id,
+                        event_type=AttemptEventType.STARTED,
+                        event_data={"started_at": now.isoformat()}
+                    )
+                    self.db.add(event)
+                elif existing_attempt.status != AttemptStatus.IN_PROGRESS:
+                    existing_attempt.status = AttemptStatus.IN_PROGRESS
+
+                    # Log resume event
+                    event = AttemptEvent(
+                        attempt_id=existing_attempt.id,
+                        event_type=AttemptEventType.RESUMED,
+                        event_data={"resumed_at": datetime.now(timezone.utc).isoformat()}
+                    )
+                    self.db.add(event)
+                
                 self.db.commit()
                 self.db.refresh(existing_attempt)
                 return existing_attempt
@@ -102,37 +128,20 @@ class AttemptService:
         ).all()
         total_q = len(active_questions)
 
-        # Create new attempt
-        expires_at = None
-        if exam.duration_minutes:
-            expires_at = now + timedelta(minutes=exam.duration_minutes)
-            if exam.end_time:
-                end_time = exam.end_time
-                if end_time.tzinfo is None:
-                    end_time = end_time.replace(tzinfo=timezone.utc)
-                if expires_at > end_time:
-                    expires_at = end_time
-
+        # Create new attempt in NOT_STARTED state
         attempt = ExamAttempt(
             student_id=student_id,
             exam_id=exam_id,
             assignment_id=assignment.id,
-            status=AttemptStatus.IN_PROGRESS,
-            started_at=now,
-            expires_at=expires_at,
+            status=AttemptStatus.NOT_STARTED,
+            started_at=None,
+            expires_at=None,
             total_questions=total_q,
-            answered_questions=0
+            answered_questions=0,
+            face_verified=False
         )
         self.db.add(attempt)
-
-        # Log start event
         self.db.flush()  # get attempt.id
-        event = AttemptEvent(
-            attempt_id=attempt.id,
-            event_type=AttemptEventType.STARTED,
-            event_data={"started_at": now.isoformat()}
-        )
-        self.db.add(event)
 
         # Pre-populate student answers for all active questions
         for q in active_questions:
@@ -148,6 +157,10 @@ class AttemptService:
 
         self.db.commit()
         self.db.refresh(attempt)
+        
+        if not is_verification_step:
+            raise ValueError("FACE_VERIFICATION_REQUIRED")
+
         return attempt
 
     def update_answer(self, attempt_id: uuid.UUID, question_id: uuid.UUID, answer_data: StudentAnswerUpdate) -> StudentAnswer:
@@ -259,6 +272,26 @@ class AttemptService:
             attempt.percentage = (score / total_possible) * 100
         else:
             attempt.percentage = 0.0
+
+    def log_event(self, attempt_id: uuid.UUID, student_id: uuid.UUID, event_type: AttemptEventType, event_data: dict) -> AttemptEvent:
+        attempt = self.db.get(ExamAttempt, attempt_id)
+        if not attempt:
+            raise ValueError("Attempt not found")
+        if attempt.student_id != student_id:
+            raise ValueError("Unauthorized attempt access")
+        if attempt.status != AttemptStatus.IN_PROGRESS:
+            raise ValueError(f"Cannot log events for attempt in {attempt.status} state")
+
+        event = AttemptEvent(
+            attempt_id=attempt_id,
+            event_type=event_type,
+            event_data=event_data,
+            timestamp=datetime.now(timezone.utc)
+        )
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(event)
+        return event
 
     def get_attempt_summary(self, attempt_id: uuid.UUID) -> ExamAttemptSummary:
         attempt = self.db.get(ExamAttempt, attempt_id)

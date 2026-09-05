@@ -86,10 +86,18 @@ class QuestionDetailReport(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+class ProctoringEventReport(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    event_data: dict
+    timestamp: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 class StudentDetailReportResponse(BaseModel):
     student: StudentPerformanceRecord
     questions: List[QuestionDetailReport]
+    proctoring_events: List[ProctoringEventReport] = []
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -13,6 +13,7 @@ import { examsApi } from '../api/exams';
 import { questionsApi } from '../api/questions';
 import { useApp } from '../context/AppContext';
 import { useBiometrics } from '../hooks/useBiometrics';
+import { useProctoringMonitor } from '../hooks/useProctoringMonitor';
 import type { ExamResponse, QuestionResponse } from '../types';
 
 const LiveExam: React.FC = () => {
@@ -34,7 +35,7 @@ const LiveExam: React.FC = () => {
     cameraActive,
     startCamera,
     stopCamera,
-    verifyFace
+    captureFrame
   } = useBiometrics();
 
   // Real hooks
@@ -77,30 +78,12 @@ const LiveExam: React.FC = () => {
     };
   }, [startCamera, stopCamera]);
 
-  // Periodic active student detection check (every 7 seconds)
-  useEffect(() => {
-    if (!cameraActive || !exam) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await verifyFace(examId);
-        if (!response.verified) {
-          addViolation("Eye Deviation", "medium");
-        }
-      } catch (err: any) {
-        const errMsg = err.message || "";
-        if (errMsg.includes("No face detected")) {
-          addViolation("Face Missing", "high");
-        } else if (errMsg.includes("Multiple faces")) {
-          addViolation("Multiple Faces", "high");
-        } else {
-          addViolation("Eye Deviation", "low");
-        }
-      }
-    }, 7000);
-
-    return () => clearInterval(interval);
-  }, [cameraActive, verifyFace, examId, addViolation, exam]);
+  const { monitoringStatus, facesDetected, framesAnalyzed, lastEvent, headPose, detectedObjects } = useProctoringMonitor(
+    examId,
+    attempt?.id,
+    cameraActive,
+    captureFrame
+  );
 
   // Telemetry event listeners: tab switching (focus loss)
   useEffect(() => {
@@ -323,8 +306,23 @@ const LiveExam: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-750">
                 <Video className="w-4 h-4 text-emerald-400" />
-                <div><div className="text-[10px] text-slate-400 uppercase">Face Count</div><div className="text-slate-200">{cameraActive ? "1 Detected" : "0 Detected"}</div></div>
+                <div><div className="text-[10px] text-slate-400 uppercase">Face Count</div><div className="text-slate-200">{cameraActive ? (facesDetected ?? "1") + " Detected" : "0 Detected"}</div></div>
               </div>
+            </div>
+
+            {/* Development-Only Debug Panel */}
+            <div className="mt-4 p-4 bg-slate-900/80 border border-slate-700 rounded-lg text-xs font-mono space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-700 pb-1 mb-2">DEBUG: AI MONITORING</div>
+              <div>Status: <span className={monitoringStatus === 'ACTIVE' ? 'text-emerald-400' : 'text-rose-400'}>{monitoringStatus}</span></div>
+              <div>Camera: {cameraActive ? 'Connected' : 'Disconnected'}</div>
+              <div>Faces Detected: {facesDetected !== null ? facesDetected : 'N/A'}</div>
+              <div>Head Direction: {headPose?.direction || 'UNKNOWN'}</div>
+              <div>Objects: {detectedObjects && detectedObjects.length > 0 ? detectedObjects.map(o => `${o.label} (${Math.round(o.confidence * 100)}%)`).join(', ') : 'None'}</div>
+              <div>Yaw: {headPose?.yaw ? `${headPose.yaw}°` : 'N/A'}</div>
+              <div>Pitch: {headPose?.pitch ? `${headPose.pitch}°` : 'N/A'}</div>
+              <div>Roll: {headPose?.roll ? `${headPose.roll}°` : 'N/A'}</div>
+              <div>Frames Analyzed: {framesAnalyzed}</div>
+              <div>Last Event: {lastEvent}</div>
             </div>
           </div>
 

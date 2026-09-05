@@ -273,9 +273,26 @@ class ReportService:
                     evaluation_status=status
                 ))
 
+        proctoring_events = []
+        if attempt:
+            from app.models.attempt_event import AttemptEvent
+            events = self.db.scalars(
+                select(AttemptEvent).where(
+                    AttemptEvent.attempt_id == attempt.id
+                ).order_by(AttemptEvent.timestamp)
+            ).all()
+            for ev in events:
+                proctoring_events.append(ProctoringEventReport(
+                    id=ev.id,
+                    event_type=ev.event_type.value,
+                    event_data=ev.event_data or {},
+                    timestamp=ev.timestamp
+                ))
+
         return StudentDetailReportResponse(
             student=student_record,
-            questions=q_details
+            questions=q_details,
+            proctoring_events=proctoring_events
         )
 
     def get_question_analytics(self, exam_id: uuid.UUID) -> QuestionAnalyticsResponse:

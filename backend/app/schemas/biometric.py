@@ -22,10 +22,36 @@ class BiometricVerifyRequest(BaseModel):
 class BiometricVerifyResponse(BaseModel):
     verified: bool
     similarity_score: float
+    confidence: str
     match_threshold: float
     retries_left: int
     message: str
     locked_until: Optional[datetime] = None
+class HeadPose(BaseModel):
+    yaw: float
+    pitch: float
+    roll: float
+    direction: str
+
+class BoundingBox(BaseModel):
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+
+class DetectedObject(BaseModel):
+    label: str
+    confidence: float
+    bounding_box: BoundingBox
+
+class BiometricAnalyzeFrameRequest(BaseModel):
+    frame: str = Field(..., description="Base64 encoded camera frame")
+
+class BiometricAnalyzeFrameResponse(BaseModel):
+    face_count: int
+    status: str
+    head_pose: Optional[HeadPose] = None
+    objects: List[DetectedObject] = Field(default_factory=list)
 
 class BiometricStatusResponse(BaseModel):
     is_registered: bool

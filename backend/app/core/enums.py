@@ -84,3 +84,6 @@ class AttemptEventType(str, enum.Enum):
     TAB_SWITCH = "tab_switch"
     FULLSCREEN_EXIT = "fullscreen_exit"
     NETWORK_DISCONNECT = "network_disconnect"
+    PROCTORING_STARTED = "proctoring_started"
+    CAMERA_DISABLED = "camera_disabled"
+    CAMERA_ERROR = "camera_error"

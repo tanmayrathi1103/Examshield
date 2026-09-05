@@ -202,7 +202,11 @@ class ExamService:
         results = query.order_by(Exam.start_time.asc()).offset(skip).limit(limit).all()
         
         exams = []
+        seen = set()
         for exam, attempt in results:
+            if exam.id in seen:
+                continue
+            seen.add(exam.id)
             exam_data = {c.name: getattr(exam, c.name) for c in exam.__table__.columns}
             exam_data["student_attempt_status"] = attempt.status.value if attempt else None
             exam_data["student_attempt_id"] = attempt.id if attempt else None

@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     BIOMETRIC_MAX_VERIFY_ATTEMPTS: int = 5
     BIOMETRIC_MAX_REGISTER_ATTEMPTS: int = 3
     
+    # Object Detection
+    OBJECT_MODEL_PATH: str = "yolov8s.pt"
+    OBJECT_CONFIDENCE_THRESHOLD: float = 0.40
+    OBJECT_IOU_THRESHOLD: float = 0.45
+    OBJECT_IMAGE_SIZE: int = 640
+    OBJECT_DEVICE: str = "cpu"
+    OBJECT_TEMPORAL_CONFIRMATION_FRAMES: int = 2
+
     # Database
     DATABASE_URL: str
     

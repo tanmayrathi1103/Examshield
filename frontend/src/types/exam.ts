@@ -76,3 +76,16 @@ export interface ExamStatsResponse {
   students_assigned: number;
   completed_attempts: number;
 }
+
+export interface AttemptEventCreate {
+  event_type: string;
+  event_data?: Record<string, any>;
+}
+
+export interface AttemptEventResponse {
+  id: string;
+  attempt_id: string;
+  event_type: string;
+  event_data: Record<string, any>;
+  timestamp: string;
+}

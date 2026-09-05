@@ -69,7 +69,11 @@ export const useBiometrics = () => {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        await videoRef.current.play().catch((err: any) => {
+          if (err.name !== 'AbortError') {
+            console.error("Video play error:", err);
+          }
+        });
         console.log("Webcam video element playback initiated successfully.");
       } else {
         console.log("videoRef.current is not bound yet. Binding will occur automatically in the layout effect.");
@@ -198,7 +202,7 @@ export const useBiometrics = () => {
   }, [captureFrame]);
 
   // Verify biometrics (Stateless integration with collected liveness frames)
-  const verifyFace = useCallback(async (challengeFrames: string[], examId?: string) => {
+  const verifyFace = useCallback(async (examId?: string, challengeFrames?: string[]) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -209,7 +213,7 @@ export const useBiometrics = () => {
 
       const response = await biometricApi.verify({
         image_base64: primaryFrame,
-        liveness_frames: challengeFrames,
+        liveness_frames: challengeFrames || [],
         exam_id: examId
       });
 

@@ -13,14 +13,18 @@ from app.core.dependencies import get_active_user
 from app.core.config import settings
 from app.core.biometric_security import BiometricSecurity
 from app.ai.face_recognition.face_service import face_recognition_service, FaceProcessingError
+from app.ai.behaviour_analysis.object_service import object_detection_service
 from app.schemas.biometric import (
     BiometricRegisterRequest,
     BiometricRegisterResponse,
     BiometricVerifyRequest,
     BiometricVerifyResponse,
+    BiometricAnalyzeFrameRequest,
+    BiometricAnalyzeFrameResponse,
     BiometricStatusResponse,
     BiometricDeleteResponse
 )
+from app.services.attempt_service import AttemptService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/biometrics", tags=["Biometrics"])
@@ -272,7 +276,36 @@ def verify_biometrics(
 
         # Compute cosine similarity between the two embeddings
         similarity = face_recognition_service.compute_cosine_similarity(new_emb, stored_emb)
-        match_passed = similarity >= settings.BIOMETRIC_MATCH_THRESHOLD
+        
+        if similarity < 0.60:
+            confidence = "FAIL"
+            match_passed = False
+            message = "Face verification failed"
+        elif similarity < 0.75:
+            confidence = "PASS"
+            match_passed = True
+            message = "Face verification successful"
+        elif similarity < 0.90:
+            confidence = "STRONG MATCH"
+            match_passed = True
+            message = "Face verification successful"
+        else:
+            confidence = "VERY HIGH CONFIDENCE MATCH"
+            match_passed = True
+            message = "Face verification successful"
+
+        if match_passed and payload.exam_id:
+            try:
+                attempt_service = AttemptService(db)
+                attempt = attempt_service.get_or_create_attempt(
+                    student_id=current_user.id, 
+                    exam_id=payload.exam_id, 
+                    is_verification_step=True
+                )
+                attempt.face_verified = True
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to update attempt verification state: {e}")
 
         # Log verification score & audit trail (never logs vectors or raw images)
         verification_log = BiometricVerificationLog(
@@ -286,18 +319,11 @@ def verify_biometrics(
         db.add(verification_log)
         db.commit()
 
-        if match_passed:
-            message = "Identity verified successfully."
-        else:
-            message = (
-                f"Face match failed (similarity score: {similarity:.2f} < {settings.BIOMETRIC_MATCH_THRESHOLD}). "
-                "Please adjust your lighting, face the camera directly, and try again."
-            )
-
         return BiometricVerifyResponse(
             verified=match_passed,
             similarity_score=round(similarity, 4),
-            match_threshold=settings.BIOMETRIC_MATCH_THRESHOLD,
+            confidence=confidence,
+            match_threshold=0.60,
             retries_left=retries_left if not match_passed else settings.BIOMETRIC_MAX_VERIFY_ATTEMPTS,
             message=message
         )
@@ -314,6 +340,53 @@ def verify_biometrics(
         ))
         db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+
+
+@router.post("/analyze-frame", response_model=BiometricAnalyzeFrameResponse)
+def analyze_frame(
+    payload: BiometricAnalyzeFrameRequest,
+    current_user: User = Depends(get_active_user)
+):
+    """
+    Analyzes a single frame during continuous proctoring to detect face presence.
+    Returns the number of detected faces.
+    """
+    try:
+        # Decode base64 to OpenCV image
+        img = face_recognition_service.decode_base64_image(payload.frame)
+        
+        # Analyze frame for faces and head pose
+        face_count, head_pose = face_recognition_service.analyze_frame_for_monitoring(img)
+        
+        # Object detection
+        detected_objects = object_detection_service.detect_objects(img)
+        
+        if face_count == 0:
+            status_text = "FACE_NOT_DETECTED"
+            head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+        elif face_count == 1:
+            status_text = "NORMAL"
+            if not head_pose:
+                head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+        else:
+            status_text = "MULTIPLE_FACES"
+            head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+            
+        return BiometricAnalyzeFrameResponse(
+            face_count=face_count,
+            status=status_text,
+            head_pose=head_pose,
+            objects=detected_objects
+        )
+    except Exception as e:
+        logger.warning(f"Frame analysis failed: {e}")
+        # Gracefully handle decoding or processing errors without crashing the exam
+        return BiometricAnalyzeFrameResponse(
+            face_count=0,
+            status="CAMERA_ERROR",
+            head_pose={"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"},
+            objects=[]
+        )
 
 
 @router.get("/status", response_model=BiometricStatusResponse)

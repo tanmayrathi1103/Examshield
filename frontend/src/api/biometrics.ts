@@ -4,6 +4,8 @@ import type {
   BiometricRegisterResponse,
   BiometricVerifyRequest,
   BiometricVerifyResponse,
+  BiometricAnalyzeFrameRequest,
+  BiometricAnalyzeFrameResponse,
   BiometricStatusResponse,
   BiometricDeleteResponse,
 } from '../types';
@@ -18,6 +20,11 @@ export const biometricApi = {
   verify: async (payload: BiometricVerifyRequest): Promise<BiometricVerifyResponse> => {
     // Uses 2-minute timeout — DeepFace FaceNet model inference can be slow on first call
     const response = await biometricApiClient.post<BiometricVerifyResponse>('/biometrics/verify', payload);
+    return response.data;
+  },
+
+  analyzeFrame: async (payload: BiometricAnalyzeFrameRequest): Promise<BiometricAnalyzeFrameResponse> => {
+    const response = await biometricApiClient.post<BiometricAnalyzeFrameResponse>('/biometrics/analyze-frame', payload);
     return response.data;
   },
 

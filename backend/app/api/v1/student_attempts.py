@@ -9,7 +9,9 @@ from app.schemas.attempt import (
     ExamAttemptResponse,
     ExamAttemptSummary,
     StudentAnswerUpdate,
-    StudentAnswerResponse
+    StudentAnswerResponse,
+    AttemptEventCreate,
+    AttemptEventResponse
 )
 from app.services.attempt_service import AttemptService
 
@@ -29,6 +31,11 @@ def start_exam_attempt(
         attempt = service.get_or_create_attempt(student_id=current_user.id, exam_id=exam_id)
         return attempt
     except ValueError as e:
+        if str(e) == "FACE_VERIFICATION_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="FACE_VERIFICATION_REQUIRED"
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -122,6 +129,32 @@ def get_attempt_summary(
         summary = service.get_attempt_summary(attempt_id)
         return summary
     except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+@router.post("/attempts/{attempt_id}/events", response_model=AttemptEventResponse)
+def log_attempt_event(
+    attempt_id: uuid.UUID,
+    event: AttemptEventCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_student),
+) -> Any:
+    """
+    Log a continuous proctoring event or exam event during an active attempt.
+    """
+    try:
+        service = AttemptService(db)
+        return service.log_event(
+            attempt_id=attempt_id,
+            student_id=current_user.id,
+            event_type=event.event_type,
+            event_data=event.event_data or {}
+        )
+    except ValueError as e:
+        if str(e) == "Unauthorized attempt access":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),

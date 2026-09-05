@@ -10,11 +10,18 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+import math
+
 # Model paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEIGHTS_DIR = BASE_DIR / "weights"
 YUNET_PATH = str(WEIGHTS_DIR / "face_detection_yunet_2023mar.onnx")
 SFACE_PATH = str(WEIGHTS_DIR / "face_recognition_sface_2021dec.onnx")
+
+# Head Pose Thresholds (Degrees)
+HEAD_YAW_THRESHOLD = 20.0
+HEAD_PITCH_THRESHOLD_UP = 20.0
+HEAD_PITCH_THRESHOLD_DOWN = 15.0
 
 
 class FaceProcessingError(Exception):
@@ -102,6 +109,29 @@ class FaceRecognitionService:
             "quality_score": round(quality_score, 2)
         }
 
+    def count_faces(self, img: np.ndarray) -> int:
+        """
+        Counts the number of faces in the frame using YuNet.
+        Returns 0 if no face is detected.
+        """
+        if os.getenv("BYPASS_FACE_DETECTION") == "true":
+            return 1
+            
+        h, w = img.shape[:2]
+        
+        if self.detector is not None:
+            self.detector.setInputSize((w, h))
+            _, faces = self.detector.detect(img)
+            
+            if faces is None or len(faces) == 0:
+                return 0
+                
+            # Filter faces by confidence threshold
+            confident_faces = [f for f in faces if f[-1] >= 0.55]
+            return len(confident_faces)
+            
+        return 0
+
     def detect_face(self, img: np.ndarray) -> Tuple[np.ndarray, float]:
         """
         Detects face and verifies exactly ONE face is present.
@@ -120,8 +150,8 @@ class FaceRecognitionService:
             _, faces = self.detector.detect(img)
             
             if faces is None or len(faces) == 0:
-                raise FaceProcessingError("No face detected. Please position your face directly inside the circle.", code="NO_FACE")
-            
+                raise FaceProcessingError("No face detected. Please ensure your face is clearly visible and well-lit.", code="NO_FACE")
+                
             # Filter faces by confidence threshold
             confident_faces = [f for f in faces if f[-1] >= 0.55]
             if len(confident_faces) == 0:
@@ -241,6 +271,133 @@ class FaceRecognitionService:
             "confidence": round(confidence, 4),
             "thumbnail_bytes": thumb_buf.tobytes()
         }
+
+    def count_faces(self, img: np.ndarray) -> int:
+        """
+        Safely counts the number of detected faces. Returns 0 if none found.
+        """
+        if os.getenv("BYPASS_FACE_DETECTION") == "true":
+            return 1
+            
+        h, w = img.shape[:2]
+        
+        if self.detector is not None:
+            self.detector.setInputSize((w, h))
+            _, faces = self.detector.detect(img)
+            
+            if faces is None or len(faces) == 0:
+                return 0
+                
+            # Filter faces by confidence threshold
+            confident_faces = [f for f in faces if f[-1] >= 0.55]
+            return len(confident_faces)
+            
+        return 0
+
+    def estimate_head_pose(self, img: np.ndarray, face_row: np.ndarray) -> Dict[str, Any]:
+        """
+        Estimates the head pose (Yaw, Pitch, Roll) using 5 facial landmarks from YuNet.
+        """
+        h, w = img.shape[:2]
+        
+        # 3D model points (generic face in standard OpenCV coordinate system: X right, Y down, Z forward into scene)
+        model_points = np.array([
+            [-34.0, -34.0, 34.0],      # Right eye (subject's right, viewer's left - smaller X, smaller Y)
+            [34.0, -34.0, 34.0],       # Left eye (subject's left, viewer's right - larger X, smaller Y)
+            [0.0, 0.0, 0.0],           # Nose tip
+            [-30.0, 30.0, 34.0],       # Right mouth corner (smaller X, larger Y)
+            [30.0, 30.0, 34.0]         # Left mouth corner (larger X, larger Y)
+        ], dtype=np.float32)
+        
+        # YuNet provides landmarks in elements 4-13
+        # Format: (right_eye_x, right_eye_y, left_eye_x, left_eye_y, nose_x, nose_y, right_mouth_x, right_mouth_y, left_mouth_x, left_mouth_y)
+        # Note: In OpenCV, YuNet's "right eye" is the subject's right eye (viewer's left side).
+        image_points = np.array([
+            [face_row[4], face_row[5]],    # Right eye
+            [face_row[6], face_row[7]],    # Left eye
+            [face_row[8], face_row[9]],    # Nose tip
+            [face_row[10], face_row[11]],  # Right mouth
+            [face_row[12], face_row[13]]   # Left mouth
+        ], dtype=np.float32)
+        
+        # Camera internals
+        focal_length = w
+        center = (w / 2, h / 2)
+        camera_matrix = np.array([
+            [focal_length, 0, center[0]],
+            [0, focal_length, center[1]],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        
+        dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
+        
+        success, rotation_vector, translation_vector = cv2.solvePnP(
+            model_points, image_points, camera_matrix, dist_coeffs, flags=cv2.SOLVEPNP_SQPNP
+        )
+        
+        if not success:
+            raise FaceProcessingError("Head pose estimation failed", code="POSE_ESTIMATION_FAILED")
+            
+        # Convert rotation vector to rotation matrix
+        rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
+        
+        # Calculate Euler angles
+        proj_matrix = np.hstack((rotation_matrix, translation_vector))
+        euler_angles = cv2.decomposeProjectionMatrix(proj_matrix)[6]
+        
+        pitch = float(euler_angles[0][0])
+        yaw = float(euler_angles[1][0])
+        roll = float(euler_angles[2][0])
+        
+        # Classification (using dominant-axis strategy with a neutral dead-zone)
+        direction = "FORWARD"
+        if abs(yaw) > HEAD_YAW_THRESHOLD or abs(pitch) > max(HEAD_PITCH_THRESHOLD_UP, HEAD_PITCH_THRESHOLD_DOWN):
+            if abs(yaw) > abs(pitch):
+                # Dominant axis is Yaw
+                direction = "RIGHT" if yaw > 0 else "LEFT"
+            else:
+                # Dominant axis is Pitch
+                direction = "DOWN" if pitch > 0 else "UP"
+            
+        return {
+            "yaw": round(yaw, 1),
+            "pitch": round(pitch, 1),
+            "roll": round(roll, 1),
+            "direction": direction
+        }
+
+    def analyze_frame_for_monitoring(self, img: np.ndarray) -> Tuple[int, Optional[Dict[str, Any]]]:
+        """
+        Detects faces and if exactly 1 face is found, estimates head pose.
+        Returns (face_count, head_pose_dict_or_none)
+        """
+        if os.getenv("BYPASS_FACE_DETECTION") == "true":
+            return 1, {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "FORWARD"}
+            
+        h, w = img.shape[:2]
+        
+        if self.detector is not None:
+            self.detector.setInputSize((w, h))
+            _, faces = self.detector.detect(img)
+            
+            if faces is None or len(faces) == 0:
+                return 0, None
+                
+            # Filter faces by confidence threshold
+            confident_faces = [f for f in faces if f[-1] >= 0.55]
+            face_count = len(confident_faces)
+            
+            if face_count == 1:
+                try:
+                    head_pose = self.estimate_head_pose(img, confident_faces[0])
+                    return face_count, head_pose
+                except Exception as e:
+                    logger.warning(f"Head pose estimation error: {e}")
+                    return face_count, {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+                    
+            return face_count, None
+            
+        return 0, None
 
 
 # Global singleton instance

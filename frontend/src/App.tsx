@@ -95,6 +95,7 @@ function App() {
             <Route path="student/dashboard" element={<StudentDashboard />} />
             <Route path="student/system-check" element={<SystemCheck />} />
             <Route path="student/face-registration" element={<FaceRegistration />} />
+            <Route path="student/face-verification" element={<FaceVerification />} />
             <Route path="student/exam/:examId/face-verification" element={<FaceVerification />} />
             <Route path="student/exam/:examId/instructions" element={<Instructions />} />
             <Route path="student/exam/:examId/live" element={<LiveExam />} />

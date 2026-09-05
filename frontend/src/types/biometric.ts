@@ -39,3 +39,34 @@ export interface BiometricDeleteResponse {
   message: string;
   erased_at: string;
 }
+
+export interface BiometricAnalyzeFrameRequest {
+  frame: string;
+}
+
+export interface HeadPose {
+  yaw: number;
+  pitch: number;
+  roll: number;
+  direction: string;
+}
+
+export interface BoundingBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface DetectedObject {
+  label: string;
+  confidence: number;
+  bounding_box: BoundingBox;
+}
+
+export interface BiometricAnalyzeFrameResponse {
+  face_count: number;
+  status: string;
+  head_pose?: HeadPose;
+  objects?: DetectedObject[];
+}
