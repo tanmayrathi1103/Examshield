@@ -4,6 +4,7 @@ import {
   mockExams, mockQuestions, mockStudents, mockFaculty, mockViolations, mockAuditLogs, mockAIConfig 
 } from '../data/mockData';
 import type { User } from '../types';
+import { adminApi } from '../api/admin';
 
 interface AppContextType {
   currentUser: User | null;
@@ -112,6 +113,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ip: '192.168.1.100'
     };
     setAuditLogs(prev => [newLog, ...prev]);
+
+    // Asynchronously persist to backend database if token is available
+    if (localStorage.getItem('access_token')) {
+      adminApi.createAuditLog(action).catch(() => {});
+    }
   };
 
   const resetExamState = () => {

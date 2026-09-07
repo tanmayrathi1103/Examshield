@@ -73,9 +73,17 @@ export interface QuestionDetailReport {
   evaluation_status: string;
 }
 
+export interface ProctoringEventReport {
+  id: string;
+  event_type: string;
+  event_data: Record<string, any>;
+  timestamp: string;
+}
+
 export interface StudentDetailReportResponse {
   student: StudentPerformanceRecord;
   questions: QuestionDetailReport[];
+  proctoring_events?: ProctoringEventReport[];
 }
 
 export interface QuestionPerformanceRecord {

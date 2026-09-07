@@ -2,7 +2,7 @@ import apiClient from './axios';
 import type {
   ExamListResponse, ExamResponse, ExamCreate, ExamUpdate,
   ExamAssignmentListResponse, ExamAssignmentResponse,
-  StudentForAssignmentList, ExamStatsResponse
+  StudentForAssignmentList, ExamStatsResponse, LiveExamMonitoringResponse
 } from '../types';
 
 export const examsApi = {
@@ -79,6 +79,28 @@ export const examsApi = {
     const response = await apiClient.get(`/exams/${examId}/report/questions`);
     return response.data;
   },
+
+  getMyReport: async (examId: string) => {
+    const response = await apiClient.get(`/exams/${examId}/report/my-report`);
+    return response.data;
+  },
+
+  getLiveMonitoring: async (examId: string): Promise<LiveExamMonitoringResponse> => {
+    const response = await apiClient.get<LiveExamMonitoringResponse>(`/exams/${examId}/live-monitoring`);
+    return response.data;
+  },
+
+  toggleSuspendAttempt: async (examId: string, attemptId: string): Promise<{ status: string; attempt_id: string }> => {
+    const response = await apiClient.post<{ status: string; attempt_id: string }>(`/exams/${examId}/attempts/${attemptId}/toggle-suspend`);
+    return response.data;
+  },
+
+  forceSubmitAttempt: async (examId: string, attemptId: string): Promise<{ status: string; attempt_id: string }> => {
+    const response = await apiClient.post<{ status: string; attempt_id: string }>(`/exams/${examId}/attempts/${attemptId}/force-submit`);
+    return response.data;
+  },
+
+
 
 
   getAssignments: async (id: string, skip: number = 0, limit: number = 100): Promise<ExamAssignmentListResponse> => {

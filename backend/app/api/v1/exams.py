@@ -12,7 +12,9 @@ from app.schemas.exam import (
     ExamAssignmentCreate, ExamAssignmentResponse, ExamAssignmentListResponse,
     StudentForAssignment, StudentForAssignmentList, ExamStatsResponse
 )
+from app.schemas.live_monitoring import LiveExamMonitoringResponse
 from app.services.exam_service import ExamService
+from app.services.attempt_service import AttemptService
 
 router = APIRouter(prefix="/exams", tags=["Exams"])
 
@@ -162,6 +164,60 @@ def get_exam_students(
     """Get all students with their assignment status for the assign-students modal."""
     students = ExamService(db).get_students_for_exam(exam_id)
     return {"items": students, "total": len(students)}
+
+
+# ─── Live Proctor Monitoring ──────────────────────────────────────────────────
+
+@router.get("/{exam_id}/live-monitoring", response_model=LiveExamMonitoringResponse, tags=["Live Proctoring"])
+def get_exam_live_monitoring(
+    exam_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff)
+) -> Any:
+    """Live proctoring telemetry of students in an ongoing exam."""
+    try:
+        service = AttemptService(db)
+        return service.get_live_monitoring_sessions(exam_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/{exam_id}/attempts/{attempt_id}/toggle-suspend", tags=["Live Proctoring"])
+def toggle_suspend_student_attempt(
+    exam_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff)
+) -> Any:
+    """Remotely suspend or re-activate a student's active exam attempt."""
+    try:
+        service = AttemptService(db)
+        attempt = service.toggle_suspend_attempt(attempt_id)
+        return {"status": attempt.status.value, "attempt_id": attempt.id}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/{exam_id}/attempts/{attempt_id}/force-submit", tags=["Live Proctoring"])
+def force_submit_student_attempt(
+    exam_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff)
+) -> Any:
+    """Remotely force-submit a compromised or expired exam attempt."""
+    try:
+        service = AttemptService(db)
+        attempt = service.force_submit_attempt(attempt_id)
+        return {"status": attempt.status.value, "attempt_id": attempt.id}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # ─── Student-specific Exam Routes ────────────────────────────────────────────

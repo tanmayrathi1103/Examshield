@@ -60,7 +60,7 @@ export const useProctoringMonitor = (
         } else if (eventType === 'multiple_faces') {
           addViolation("Multiple Faces", "high");
         } else if (eventType === 'looking_away') {
-          addViolation("Looking Away", "medium");
+          addViolation("Eye Deviation", "medium");
         } else if (eventType === 'phone_detected') {
           addViolation("Phone Detected", "high");
         }

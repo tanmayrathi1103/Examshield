@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from app.database.session import get_db
-from app.core.dependencies import require_staff
+from app.core.dependencies import require_staff, get_current_student
 from app.models.user import User
 from app.services.report_service import ReportService
 from app.schemas.report import (
@@ -14,6 +14,23 @@ from app.schemas.report import (
 )
 
 router = APIRouter()
+
+@router.get("/{exam_id}/report/my-report", response_model=StudentDetailReportResponse)
+def get_my_student_report(
+    exam_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_student)
+):
+    """
+    Allow an authenticated student to view their own exam performance and compliance report.
+    """
+    try:
+        service = ReportService(db)
+        return service.get_student_detail_report(exam_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An error occurred while generating your report")
 
 @router.get("/{exam_id}/report", response_model=ExamReportSummary)
 def get_exam_report_summary(

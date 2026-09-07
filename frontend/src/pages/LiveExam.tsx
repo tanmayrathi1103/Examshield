@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ShieldAlert, Video, Mic, Wifi, Clock, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, 
-  HelpCircle, Eye, Shield, Smartphone, Globe
+  HelpCircle, Eye, Shield, Smartphone, Globe, Ban
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useExamAttempt } from '../hooks/useExamAttempt';
@@ -11,9 +11,11 @@ import { useAutoSave } from '../hooks/useAutoSave';
 import { useQuestionNavigation } from '../hooks/useQuestionNavigation';
 import { examsApi } from '../api/exams';
 import { questionsApi } from '../api/questions';
+import { attemptsApi } from '../api/attempts';
 import { useApp } from '../context/AppContext';
 import { useBiometrics } from '../hooks/useBiometrics';
 import { useProctoringMonitor } from '../hooks/useProctoringMonitor';
+import { useExamWebSocket } from '../hooks/useExamWebSocket';
 import type { ExamResponse, QuestionResponse } from '../types';
 
 const LiveExam: React.FC = () => {
@@ -115,6 +117,45 @@ const LiveExam: React.FC = () => {
   };
 
   const { formattedTime, timeRemaining } = useExamTimer(attempt?.expires_at, handleExpire);
+
+  // Real-time WebSocket handler for remote proctor commands (Instant lock/unlock/submit)
+  const handleStudentWsMessage = React.useCallback((msg: any) => {
+    if (!msg || !msg.type) return;
+
+    if (msg.type === 'STATUS_CHANGED') {
+      const nextStatus = msg.status;
+      setAttempt(prev => prev ? { ...prev, status: nextStatus } : prev);
+    } else if (msg.type === 'FORCE_SUBMITTED') {
+      navigate(`/student/exam/${examId}/result?attemptId=${attempt?.id}`);
+    }
+  }, [examId, attempt?.id, navigate, setAttempt]);
+
+  const studentWsPath = examId && attempt?.id ? `/api/v1/ws/exam/${examId}/student/${attempt.id}` : '';
+  const { isConnected: isWsConnected } = useExamWebSocket({
+    path: studentWsPath,
+    enabled: !!(examId && attempt?.id),
+    onMessage: handleStudentWsMessage
+  });
+
+  // Background fallback synchronization every 30 seconds
+  useEffect(() => {
+    if (!attempt?.id) return;
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await attemptsApi.getAttempt(attempt.id);
+        if (fresh.status !== attempt.status) {
+          setAttempt(fresh);
+          if (fresh.status === 'auto_submitted' || fresh.status === 'submitted') {
+            navigate(`/student/exam/${examId}/result?attemptId=${attempt.id}`);
+          }
+        }
+      } catch (e) {
+        // ignore background poll errors
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [attempt?.id, attempt?.status, examId, navigate, setAttempt]);
+
 
   if (loading) {
     return (
@@ -243,6 +284,16 @@ const LiveExam: React.FC = () => {
             <Shield className="w-4 h-4" />
             {isExamFullscreen ? '🔒 Fullscreen Locked' : '⚠️ Lock Escaped! Click to Re-lock'}
           </button>
+
+          {/* Real-Time WebSocket Link Badge */}
+          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all ${
+            isWsConnected 
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+            {isWsConnected ? '⚡ Real-Time Proctor Link' : 'Connecting Proctor Link...'}
+          </span>
 
           {/* Autosave Status */}
           <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
@@ -522,6 +573,26 @@ const LiveExam: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Remote Proctor Suspension Overlay */}
+      {attempt?.status === 'paused' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-6">
+          <div className="bg-slate-900 border border-slate-700 max-w-md w-full p-8 rounded-3xl text-center space-y-4 text-white shadow-2xl">
+            <div className="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto animate-pulse">
+              <Ban className="w-8 h-8" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-extrabold text-amber-400 tracking-tight">Assessment Temporarily Suspended</h2>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Your exam session has been suspended by the proctor. Please remain seated and face the webcam. The assessment will resume automatically when re-activated.
+              </p>
+            </div>
+            <div className="pt-2 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+              Telemetry Status: Monitoring Active • Standby
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

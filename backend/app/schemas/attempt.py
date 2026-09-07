@@ -73,3 +73,29 @@ class ExamAttemptSummary(BaseModel):
     answered_questions: int
     submitted_at: Optional[datetime]
     risk_score: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentExamHistoryItem(BaseModel):
+    attempt_id: UUID4
+    exam_id: UUID4
+    title: str
+    exam_code: str
+    subject: str
+    duration_minutes: int
+    status: AttemptStatus
+    started_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    score: Optional[float] = None
+    total_marks: float = 0.0
+    passing_marks: float = 0.0
+    percentage: Optional[float] = None
+    result: str = "PENDING"
+    integrity_score: float = 100.0
+    violations_count: int = 0
+    total_questions: int = 0
+    answered_questions: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+

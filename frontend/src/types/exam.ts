@@ -89,3 +89,25 @@ export interface AttemptEventResponse {
   event_data: Record<string, any>;
   timestamp: string;
 }
+
+export interface StudentExamHistoryItem {
+  attempt_id: string;
+  exam_id: string;
+  title: string;
+  exam_code: string;
+  subject: string;
+  duration_minutes: number;
+  status: string;
+  started_at?: string;
+  submitted_at?: string;
+  score?: number;
+  total_marks: number;
+  passing_marks: number;
+  percentage?: number;
+  result: string;
+  integrity_score: number;
+  violations_count: number;
+  total_questions: number;
+  answered_questions: number;
+}
+

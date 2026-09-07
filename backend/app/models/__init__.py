@@ -10,3 +10,5 @@ from app.models.exam_attempt import ExamAttempt
 from app.models.student_answer import StudentAnswer
 from app.models.attempt_event import AttemptEvent
 from app.models.student_biometric import StudentBiometric, BiometricVerificationLog, BiometricRateLimit
+from app.models.ai_settings import AISettings
+from app.models.audit_log import AuditLog

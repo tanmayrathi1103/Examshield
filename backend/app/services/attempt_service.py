@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 import uuid
 
@@ -10,8 +10,16 @@ from app.models.exam_assignment import ExamAssignment
 from app.models.exam import Exam
 from app.models.question import Question, QuestionOption
 from app.models.attempt_event import AttemptEvent
+from app.models.user import User
+from app.models.student_profile import StudentProfile
 from app.core.enums import AttemptStatus, AssignmentStatus, AttemptEventType, QuestionType, ExamStatus
-from app.schemas.attempt import StudentAnswerUpdate, ExamAttemptSummary
+from app.schemas.attempt import StudentAnswerUpdate, ExamAttemptSummary, StudentExamHistoryItem
+from app.schemas.live_monitoring import (
+    LiveExamMonitoringResponse,
+    LiveStudentSessionResponse,
+    LiveViolationEvent
+)
+from app.core.websocket_manager import ws_manager
 
 
 class AttemptService:
@@ -291,6 +299,19 @@ class AttemptService:
         self.db.add(event)
         self.db.commit()
         self.db.refresh(event)
+
+        # Broadcast real-time violation event to observing proctors
+        severity = event_data.get("severity", "MEDIUM") if isinstance(event_data, dict) else "MEDIUM"
+        ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
+            "type": "VIOLATION_EVENT",
+            "attempt_id": str(attempt.id),
+            "student_id": str(student_id),
+            "event_type": event_type.value,
+            "severity": severity,
+            "timestamp": event.timestamp.isoformat(),
+            "event_data": event_data
+        })
+
         return event
 
     def get_attempt_summary(self, attempt_id: uuid.UUID) -> ExamAttemptSummary:
@@ -308,3 +329,233 @@ class AttemptService:
             submitted_at=attempt.submitted_at,
             risk_score=attempt.risk_score
         )
+
+    def get_student_exam_history(self, student_id: uuid.UUID) -> List[StudentExamHistoryItem]:
+        attempts = self.db.scalars(
+            select(ExamAttempt).where(
+                and_(
+                    ExamAttempt.student_id == student_id,
+                    ExamAttempt.is_deleted == False
+                )
+            ).order_by(ExamAttempt.created_at.desc())
+        ).all()
+
+        history = []
+        for attempt in attempts:
+            exam = attempt.exam
+            if not exam:
+                exam = self.db.get(Exam, attempt.exam_id)
+            if not exam:
+                continue
+
+            total_marks = float(exam.total_marks or 0.0)
+            passing_marks = float(exam.passing_marks or 0.0)
+            
+            if attempt.status in [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED, AttemptStatus.EVALUATED]:
+                if attempt.score is not None:
+                    result = "PASS" if attempt.score >= passing_marks else "FAIL"
+                else:
+                    result = "UNDER_REVIEW"
+            else:
+                result = "PENDING"
+
+            violations_count = len(attempt.events) if attempt.events else 0
+            
+            if attempt.risk_score is not None:
+                integrity_score = max(0.0, min(100.0, 100.0 - float(attempt.risk_score)))
+            else:
+                deduction = violations_count * 10.0
+                integrity_score = max(20.0, 100.0 - deduction)
+
+            q_count = attempt.total_questions
+            if not q_count and exam.questions:
+                q_count = len([q for q in exam.questions if not q.is_deleted])
+
+            history.append(StudentExamHistoryItem(
+                attempt_id=attempt.id,
+                exam_id=exam.id,
+                title=exam.title,
+                exam_code=exam.exam_code,
+                subject=exam.subject,
+                duration_minutes=exam.duration_minutes,
+                status=attempt.status,
+                started_at=attempt.started_at,
+                submitted_at=attempt.submitted_at,
+                score=attempt.score,
+                total_marks=total_marks,
+                passing_marks=passing_marks,
+                percentage=attempt.percentage,
+                result=result,
+                integrity_score=round(integrity_score, 1),
+                violations_count=violations_count,
+                total_questions=q_count or 0,
+                answered_questions=attempt.answered_questions or 0
+            ))
+
+        return history
+
+    def get_live_monitoring_sessions(self, exam_id: uuid.UUID) -> LiveExamMonitoringResponse:
+        exam = self.db.get(Exam, exam_id)
+        if not exam:
+            raise ValueError("Exam not found")
+
+        # Fetch all attempts for this exam with student and profile
+        attempts = self.db.execute(
+            select(ExamAttempt, User, StudentProfile)
+            .join(User, ExamAttempt.student_id == User.id)
+            .outerjoin(StudentProfile, User.id == StudentProfile.user_id)
+            .where(
+                and_(
+                    ExamAttempt.exam_id == exam_id,
+                    ExamAttempt.is_deleted == False
+                )
+            )
+            .order_by(ExamAttempt.started_at.desc().nullslast())
+        ).all()
+
+        sessions = []
+        active_count = 0
+
+        for attempt, user, profile in attempts:
+            if attempt.status in [AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED]:
+                active_count += 1
+
+            # Fetch recent events
+            events = self.db.scalars(
+                select(AttemptEvent)
+                .where(AttemptEvent.attempt_id == attempt.id)
+                .order_by(AttemptEvent.timestamp.desc())
+                .limit(15)
+            ).all()
+
+            violation_events = []
+            for ev in events:
+                severity = "medium"
+                ev_data = ev.event_data or {}
+                if isinstance(ev_data, dict):
+                    severity = ev_data.get("severity", "medium").lower()
+
+                ev_type_upper = ev.event_type.value.upper()
+                if any(k in ev_type_upper for k in ["PHONE", "MULTIPLE", "MISMATCH", "CAMERA_ERROR"]):
+                    severity = "high"
+
+                violation_events.append(LiveViolationEvent(
+                    id=ev.id,
+                    event_type=ev.event_type.value,
+                    severity=severity,
+                    timestamp=ev.timestamp,
+                    event_data=ev_data
+                ))
+
+            # Total non-lifecycle violations count
+            all_violations_count = sum(
+                1 for e in (attempt.events or [])
+                if e.event_type.value.upper() not in ["STARTED", "RESUMED", "SUBMITTED", "AUTO_SUBMITTED", "PROCTORING_STARTED"]
+            )
+
+            # Integrity score calculation
+            if attempt.risk_score is not None:
+                integrity = max(0.0, min(100.0, 100.0 - float(attempt.risk_score)))
+            else:
+                integrity = max(20.0, 100.0 - (all_violations_count * 10.0))
+
+            q_total = attempt.total_questions
+            if not q_total and exam.questions:
+                q_total = len([q for q in exam.questions if not q.is_deleted])
+
+            sessions.append(LiveStudentSessionResponse(
+                attempt_id=attempt.id,
+                student_id=user.id,
+                student_name=user.full_name,
+                roll_no=profile.enrollment_number if profile else None,
+                department=profile.branch.value if profile and profile.branch else None,
+                status=attempt.status,
+                started_at=attempt.started_at,
+                submitted_at=attempt.submitted_at,
+                integrity_score=round(integrity, 1),
+                answered_questions=attempt.answered_questions or 0,
+                total_questions=q_total or 0,
+                violations_count=all_violations_count,
+                recent_events=violation_events
+            ))
+
+        return LiveExamMonitoringResponse(
+            exam_id=exam.id,
+            exam_title=exam.title,
+            exam_code=exam.exam_code,
+            active_count=active_count,
+            sessions=sessions
+        )
+
+    def toggle_suspend_attempt(self, attempt_id: uuid.UUID) -> ExamAttempt:
+        attempt = self.db.get(ExamAttempt, attempt_id)
+        if not attempt:
+            raise ValueError("Attempt not found")
+        if attempt.status in [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED, AttemptStatus.EVALUATED]:
+            raise ValueError(f"Cannot suspend attempt that is already {attempt.status.value}")
+
+        if attempt.status == AttemptStatus.PAUSED:
+            attempt.status = AttemptStatus.IN_PROGRESS
+            ev_type = AttemptEventType.RESUMED
+            action = "resumed_by_proctor"
+        else:
+            attempt.status = AttemptStatus.PAUSED
+            ev_type = AttemptEventType.PAUSED
+            action = "suspended_by_proctor"
+
+        event = AttemptEvent(
+            attempt_id=attempt.id,
+            event_type=ev_type,
+            event_data={"action": action, "severity": "HIGH", "timestamp": datetime.now(timezone.utc).isoformat()}
+        )
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(attempt)
+
+        # Broadcast instant status to student channel and proctors
+        ws_manager.dispatch_send_to_student(str(attempt.exam_id), str(attempt.id), {
+            "type": "STATUS_CHANGED",
+            "status": attempt.status.value,
+            "message": f"Your exam attempt has been {attempt.status.value} by the proctor."
+        })
+        ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
+            "type": "SESSION_UPDATED",
+            "attempt_id": str(attempt.id),
+            "status": attempt.status.value
+        })
+
+        return attempt
+
+    def force_submit_attempt(self, attempt_id: uuid.UUID) -> ExamAttempt:
+        attempt = self.db.get(ExamAttempt, attempt_id)
+        if not attempt:
+            raise ValueError("Attempt not found")
+        if attempt.status in [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED, AttemptStatus.EVALUATED]:
+            return attempt
+
+        # Finalize as auto submitted
+        submitted_attempt = self._submit_attempt(attempt_id, auto=True)
+        event = AttemptEvent(
+            attempt_id=attempt_id,
+            event_type=AttemptEventType.AUTO_SUBMITTED,
+            event_data={"action": "force_submitted_by_proctor", "severity": "HIGH", "timestamp": datetime.now(timezone.utc).isoformat()}
+        )
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(submitted_attempt)
+
+        # Broadcast instant force submission to student channel and proctors
+        ws_manager.dispatch_send_to_student(str(submitted_attempt.exam_id), str(submitted_attempt.id), {
+            "type": "FORCE_SUBMITTED",
+            "status": submitted_attempt.status.value,
+            "message": "Your exam attempt has been force-submitted by the proctor."
+        })
+        ws_manager.dispatch_broadcast_to_proctors(str(submitted_attempt.exam_id), {
+            "type": "SESSION_UPDATED",
+            "attempt_id": str(submitted_attempt.id),
+            "status": submitted_attempt.status.value
+        })
+
+        return submitted_attempt
+
+

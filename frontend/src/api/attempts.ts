@@ -1,5 +1,5 @@
 import api from './axios';
-import type { AttemptEventCreate, AttemptEventResponse } from '../types';
+import type { AttemptEventCreate, AttemptEventResponse, StudentExamHistoryItem } from '../types';
 
 export interface StudentAnswer {
   id: string;
@@ -96,5 +96,14 @@ export const attemptsApi = {
   logEvent: async (attemptId: string, event: AttemptEventCreate): Promise<AttemptEventResponse> => {
     const response = await api.post(`/student/attempts/${attemptId}/events`, event);
     return response.data;
+  },
+
+  /**
+   * Get student exam attempt history
+   */
+  getHistory: async (): Promise<StudentExamHistoryItem[]> => {
+    const response = await api.get<StudentExamHistoryItem[]>('/student/attempts/history');
+    return response.data;
   }
 };
+

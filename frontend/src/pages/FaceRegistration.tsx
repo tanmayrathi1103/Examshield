@@ -282,7 +282,6 @@ const FaceRegistration: React.FC = () => {
               <button
                 onClick={() => {
                   setStep(1);
-                  resetLiveness();
                   startCamera();
                 }}
                 className="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 rounded-xl text-xs transition-colors flex items-center gap-1.5"

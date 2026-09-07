@@ -19,7 +19,8 @@ from app.schemas.report import (
     StudentDetailReportResponse,
     QuestionDetailReport,
     QuestionAnalyticsResponse,
-    QuestionPerformanceRecord
+    QuestionPerformanceRecord,
+    ProctoringEventReport
 )
 from app.services.evaluation_service import EvaluationService
 
