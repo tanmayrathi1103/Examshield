@@ -11,7 +11,7 @@ interface AppContextType {
   setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
   isAuthenticated: boolean;
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
-  userRole: 'student' | 'faculty' | 'admin' | 'guest';
+  userRole: 'student' | 'faculty' | 'admin' | 'super_admin' | 'guest';
   exams: Exam[];
   setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
   questions: Question[];
@@ -51,8 +51,13 @@ interface AppContextType {
   faceVerified: boolean;
   setFaceVerified: (val: boolean) => void;
   
+  // Global Sidebar collapse state
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  toggleSidebar: () => void;
+
   // Method to log custom violations dynamically
-  addViolation: (type: ViolationLog['type'], severity: ViolationLog['severity']) => void;
+  addViolation: (type: ViolationLog['type'], severity: ViolationLog['severity'], attemptId?: string) => void;
   addAuditLog: (action: string) => void;
   resetExamState: () => void;
 }
@@ -91,7 +96,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [faceRegistered, setFaceRegistered] = useState(false);
   const [faceVerified, setFaceVerified] = useState(false);
 
-  const addViolation = (type: ViolationLog['type'], severity: ViolationLog['severity']) => {
+  // Global Sidebar Collapse State (Collapsed by default as requested)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const toggleSidebar = () => setIsSidebarCollapsed(prev => !prev);
+
+  const addViolation = (type: ViolationLog['type'], severity: ViolationLog['severity'], attemptId?: string) => {
     const newViolation: ViolationLog = {
       id: `v_${Date.now()}`,
       studentName: currentUser?.full_name || 'Simulated Student',
@@ -99,6 +108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toISOString(),
       type,
       severity,
+      attemptId,
       resolved: false
     };
     setViolations(prev => [newViolation, ...prev]);
@@ -150,6 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isBrowserSecure, setIsBrowserSecure,
       faceRegistered, setFaceRegistered,
       faceVerified, setFaceVerified,
+      isSidebarCollapsed, setIsSidebarCollapsed, toggleSidebar,
       addViolation,
       addAuditLog,
       resetExamState

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Video, ShieldAlert, AlertTriangle, CheckCircle, RefreshCw, 
-  Clock, BookOpen, AlertCircle, Ban, PlayCircle, Eye, Shield
+  Clock, BookOpen, AlertCircle, Ban, PlayCircle, Eye, Shield,
+  Volume2, VolumeX, Bell, Radio, ExternalLink, X
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { examsApi } from '../api/exams';
 import { useExamWebSocket } from '../hooks/useExamWebSocket';
 import type { 
@@ -11,6 +13,65 @@ import type {
   LiveExamMonitoringResponse, 
   LiveStudentSessionResponse 
 } from '../types';
+
+interface RealtimeAlertItem {
+  id: string;
+  attempt_id: string;
+  student_name: string;
+  roll_no?: string;
+  event_type: string;
+  severity: 'low' | 'medium' | 'high';
+  timestamp: string;
+  reason?: string;
+}
+
+// Web Audio API proctor alert tone
+const playProctorAlertChime = (severity: 'low' | 'medium' | 'high' = 'high') => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    if (severity === 'high') {
+      // High-urgency proctor chime: 880Hz -> 660Hz -> 880Hz beep sequence
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      
+      const now = ctx.currentTime;
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(660, now + 0.1);
+      osc.frequency.setValueAtTime(880, now + 0.2);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } else {
+      // Medium-urgency chime: 587Hz -> 784Hz pleasant notification
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+
+      const now = ctx.currentTime;
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.15);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+  } catch (e) {
+    console.debug('Proctor audio chime error:', e);
+  }
+};
 
 const LiveMonitoring: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,33 +87,83 @@ const LiveMonitoring: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [confirmSubmitModal, setConfirmSubmitModal] = useState<boolean>(false);
 
+  // Real-time alerts queue & sound preferences
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [realtimeAlerts, setRealtimeAlerts] = useState<RealtimeAlertItem[]>([]);
+  const [recentlyAlertedAttempts, setRecentlyAlertedAttempts] = useState<{ [attemptId: string]: number }>({});
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
   // Real-time WebSocket event handler
   const handleWebSocketMessage = useCallback((msg: any) => {
     if (!msg || !msg.type) return;
 
     if (msg.type === 'VIOLATION_EVENT') {
-      const { attempt_id, event_type, severity, timestamp, event_data } = msg;
+      const { attempt_id, event_type, severity, timestamp, event_data, student_name, roll_no } = msg;
+      const normalizedSeverity: 'low' | 'medium' | 'high' = 
+        severity?.toLowerCase() === 'high' ? 'high' : severity?.toLowerCase() === 'low' ? 'low' : 'medium';
+
+      // 1. Play alert chime
+      if (soundEnabledRef.current) {
+        playProctorAlertChime(normalizedSeverity);
+      }
+
+      // 2. Mark attempt as recently alerted for card pulsing effect
+      setRecentlyAlertedAttempts(prev => ({
+        ...prev,
+        [attempt_id]: Date.now()
+      }));
+
+      // 3. Extract human-readable reason
+      const reason = event_data?.reason || event_data?.object || event_data?.action || undefined;
+
+      // 4. Update session data dynamically
       setMonitoringData(prev => {
         if (!prev) return prev;
+        const targetStudent = prev.sessions.find(s => s.attempt_id === attempt_id);
+        const resolvedName = student_name || targetStudent?.student_name || 'Student';
+        const resolvedRoll = roll_no || targetStudent?.roll_no || undefined;
+
+        // Push to real-time notification toasts queue
+        const alertItem: RealtimeAlertItem = {
+          id: `alert_${Date.now()}_${Math.random()}`,
+          attempt_id,
+          student_name: resolvedName,
+          roll_no: resolvedRoll,
+          event_type,
+          severity: normalizedSeverity,
+          timestamp: timestamp || new Date().toISOString(),
+          reason
+        };
+
+        setRealtimeAlerts(currentAlerts => [alertItem, ...currentAlerts.slice(0, 4)]);
+
         const updatedSessions = prev.sessions.map(s => {
           if (s.attempt_id === attempt_id) {
             const newEvent = {
               id: `ws_${Date.now()}`,
               event_type,
-              severity: severity?.toLowerCase() || 'medium',
-              timestamp,
+              severity: normalizedSeverity,
+              timestamp: timestamp || new Date().toISOString(),
               event_data
             };
-            const penalty = severity?.toUpperCase() === 'HIGH' ? 15 : 8;
+            const exactCount = typeof msg.violations_count === 'number' ? msg.violations_count : s.violations_count + 1;
+            const updatedIntegrity = Math.max(0, Math.round(100 - (exactCount * 10)));
             return {
               ...s,
-              violations_count: s.violations_count + 1,
-              integrity_score: Math.max(0, Math.round(s.integrity_score - penalty)),
+              violations_count: exactCount,
+              integrity_score: updatedIntegrity,
               recent_events: [newEvent, ...s.recent_events.slice(0, 9)]
             };
           }
           return s;
         });
+
+        // If target student wasn't in sessions yet, trigger quiet re-fetch
+        if (!targetStudent) {
+          fetchLiveTelemetry(true);
+        }
+
         return { ...prev, sessions: updatedSessions };
       });
     } else if (msg.type === 'SESSION_UPDATED') {
@@ -135,15 +246,25 @@ const LiveMonitoring: React.FC = () => {
     }
   }, [selectedExamId, fetchLiveTelemetry]);
 
-  // 3. Fallback background sync every 30 seconds (WebSockets handle instant alerts)
+  // 3. Fast real-time continuous background sync every 3 seconds (guarantees dynamic updates without refresh)
   useEffect(() => {
     if (!selectedExamId) return;
     const interval = setInterval(() => {
       fetchLiveTelemetry(true);
-    }, 30000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [selectedExamId, fetchLiveTelemetry]);
+
+  // Auto dismiss oldest realtime alert after 7 seconds
+  useEffect(() => {
+    if (realtimeAlerts.length > 0) {
+      const timer = setTimeout(() => {
+        setRealtimeAlerts(prev => prev.slice(1));
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [realtimeAlerts]);
 
   // Handle switching selected exam
   const handleExamChange = (newExamId: string) => {
@@ -216,8 +337,8 @@ const LiveMonitoring: React.FC = () => {
           <p className="text-slate-500 mt-1">Real-time optical telemetry, behavior logs, and proctor intervention controls.</p>
         </div>
 
-        {/* Controls: Exam Selector & Refresh */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        {/* Controls: Exam Selector, Audio Alerts, & Refresh */}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="flex-1 md:w-64">
             <select
               value={selectedExamId}
@@ -232,6 +353,28 @@ const LiveMonitoring: React.FC = () => {
               ))}
             </select>
           </div>
+
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`p-2.5 rounded-xl border shadow-xs transition-all flex items-center justify-center gap-1.5 text-xs font-bold ${
+              soundEnabled 
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' 
+                : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'
+            }`}
+            title={soundEnabled ? "Live Sound Alerts Enabled (Click to Mute)" : "Live Sound Alerts Muted (Click to Enable)"}
+          >
+            {soundEnabled ? (
+              <>
+                <Volume2 className="w-4 h-4 text-indigo-600" />
+                <span className="hidden sm:inline">Audio Alerts ON</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-slate-400" />
+                <span className="hidden sm:inline">Audio Muted</span>
+              </>
+            )}
+          </button>
 
           <button
             onClick={() => fetchLiveTelemetry(false)}
@@ -273,8 +416,12 @@ const LiveMonitoring: React.FC = () => {
           {/* Active Students Grid (2 Cols on left) */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Active Assessment Rooms ({monitoringData.sessions.length})
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <span>Active Assessment Rooms ({monitoringData.sessions.length})</span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
               </h3>
               <span className="text-xs font-semibold text-slate-500">
                 {monitoringData.active_count} In-Progress
@@ -286,6 +433,7 @@ const LiveMonitoring: React.FC = () => {
                 const isSelected = selectedAttemptId === session.attempt_id;
                 const isPaused = session.status === 'paused';
                 const isSubmitted = session.status === 'submitted' || session.status === 'auto_submitted';
+                const isRecentlyAlerted = recentlyAlertedAttempts[session.attempt_id] && (Date.now() - recentlyAlertedAttempts[session.attempt_id] < 6000);
 
                 let statusBadge = (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -322,14 +470,23 @@ const LiveMonitoring: React.FC = () => {
                     key={session.attempt_id}
                     onClick={() => setSelectedAttemptId(session.attempt_id)}
                     className={`p-5 rounded-2xl border text-left flex flex-col justify-between h-48 hover:shadow-md transition-all bg-white relative ${
-                      isSelected 
+                      isRecentlyAlerted
+                        ? 'border-rose-500 ring-4 ring-rose-500/30 shadow-lg animate-pulse bg-rose-50/20'
+                        : isSelected 
                         ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs' 
                         : 'border-slate-200'
                     }`}
                   >
                     <div className="flex justify-between items-start w-full">
                       <div className="space-y-0.5">
-                        <h4 className="font-extrabold text-slate-800 text-sm">{session.student_name}</h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-extrabold text-slate-800 text-sm">{session.student_name}</h4>
+                          {isRecentlyAlerted && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-rose-600 text-white flex items-center gap-0.5">
+                              ⚡ LIVE ALERT
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-400 font-semibold uppercase">
                           {session.roll_no || 'ID: ' + session.student_id.slice(0, 8)} • {session.department || 'Student'}
                         </p>
@@ -523,6 +680,72 @@ const LiveMonitoring: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Real-time Dynamic Violation Notification Toasts Queue */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+        <AnimatePresence>
+          {realtimeAlerts.map((alert) => {
+            const isHigh = alert.severity === 'high';
+            return (
+              <motion.div
+                key={alert.id}
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                className={`p-4 rounded-2xl shadow-2xl border flex flex-col gap-2 pointer-events-auto backdrop-blur-md transition-all ${
+                  isHigh 
+                    ? 'bg-rose-950/90 text-rose-100 border-rose-500/50 ring-2 ring-rose-500/20' 
+                    : 'bg-slate-900/90 text-slate-100 border-amber-500/50 ring-2 ring-amber-500/20'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`p-1.5 rounded-lg ${isHigh ? 'bg-rose-600/30 text-rose-400' : 'bg-amber-600/30 text-amber-400'}`}>
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <div className="text-xs font-black tracking-wide flex items-center gap-1.5">
+                        <span className="text-white">{alert.student_name}</span>
+                        <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-extrabold ${
+                          isHigh ? 'bg-rose-600 text-white' : 'bg-amber-500 text-black'
+                        }`}>
+                          {alert.severity}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {alert.roll_no || 'Candidate'} • {new Date(alert.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setRealtimeAlerts(prev => prev.filter(a => a.id !== alert.id))}
+                    className="text-slate-400 hover:text-white p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="text-xs font-semibold pl-8 text-slate-200">
+                  <span className="underline decoration-rose-500/60 font-bold">{formatEventType(alert.event_type)}</span>
+                  {alert.reason && <span className="text-slate-400 text-[11px] block mt-0.5">"{alert.reason}"</span>}
+                </div>
+
+                <div className="pl-8 pt-1 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setSelectedAttemptId(alert.attempt_id);
+                      setRealtimeAlerts(prev => prev.filter(a => a.id !== alert.id));
+                    }}
+                    className="text-[10px] font-bold px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Focus Student Room
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

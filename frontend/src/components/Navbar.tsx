@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
-import { Bell, User, Laptop, Shield, PlayCircle, LogOut } from 'lucide-react';
+import { Bell, User, Laptop, Shield, PlayCircle, LogOut, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
-  const { currentUser, userRole, addViolation, activeExamId } = useApp();
+  const { currentUser, userRole, addViolation, activeExamId, isSidebarCollapsed, toggleSidebar } = useApp();
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [showSim, setShowSim] = useState(false);
   return (
-    <header className="glass h-16 px-6 border-b border-slate-200/80 flex items-center justify-between sticky top-0 z-40 bg-white/80">
-      <div className="flex items-center gap-4">
-        <h2 className="text-xl font-bold text-slate-800 capitalize">
+    <header className="glass h-16 px-6 border-b border-slate-200/80 flex items-center justify-between sticky top-0 z-40 bg-white/80 transition-all duration-300">
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Toggle Button */}
+        <button
+          onClick={toggleSidebar}
+          className="p-2 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 active:bg-indigo-50 active:scale-95 rounded-xl transition-all duration-200 border border-slate-200/60 shadow-xs"
+          title={isSidebarCollapsed ? "Expand Sidebar (☰)" : "Collapse Sidebar (☰)"}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-xl font-extrabold text-slate-800 capitalize tracking-tight">
           {userRole} Portal
         </h2>
-
       </div>
 
       <div className="flex items-center gap-4">

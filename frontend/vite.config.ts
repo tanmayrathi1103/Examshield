@@ -7,5 +7,18 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 4434,
+    host: true, // Exposes on local network (0.0.0.0)
+    allowedHosts: true, // Allows external tunnel hosts (localtunnel, ngrok, pinggy)
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
+    },
   },
 })

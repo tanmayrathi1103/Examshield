@@ -1,5 +1,6 @@
 import uuid
 import logging
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, and_, select
@@ -16,6 +17,15 @@ from app.schemas.exam import ExamCreate, ExamUpdate, ExamAssignmentCreate
 from app.core.enums import ExamStatus, AssignmentStatus, UserRole, AttemptStatus
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_datetime(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensures datetime is timezone-aware in UTC to prevent offset-naive comparison errors."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 class ExamService:
@@ -52,7 +62,7 @@ class ExamService:
     def update_exam(self, exam_id: uuid.UUID, exam_in: ExamUpdate, user_id: uuid.UUID, role: UserRole) -> Exam:
         exam = self.get_exam_by_id(exam_id)
 
-        if role != UserRole.ADMIN and exam.created_by != user_id:
+        if role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this exam")
 
         update_data = exam_in.model_dump(exclude_unset=True)
@@ -61,8 +71,11 @@ class ExamService:
 
         if exam.passing_marks > exam.total_marks:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passing marks cannot be greater than total marks")
-        if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
+        if exam.start_time and exam.end_time:
+            s_time = normalize_datetime(exam.start_time)
+            e_time = normalize_datetime(exam.end_time)
+            if e_time and s_time and e_time <= s_time:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
 
         try:
             self.db.commit()
@@ -124,12 +137,16 @@ class ExamService:
         if exam.passing_marks > exam.total_marks:
             errors.append("Passing marks cannot exceed total marks")
 
-        # 5. Must have a schedule (start_time and end_time)
+        # 5. Must have a schedule (start_time and end_time) - auto-populate if omitted
         if not exam.start_time:
-            errors.append("Exam must have a scheduled start time before publishing")
+            exam.start_time = datetime.now(timezone.utc)
         if not exam.end_time:
-            errors.append("Exam must have a scheduled end time before publishing")
-        if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
+            s_time = normalize_datetime(exam.start_time) or datetime.now(timezone.utc)
+            exam.end_time = s_time + timedelta(minutes=exam.duration_minutes or 60)
+
+        s_time = normalize_datetime(exam.start_time)
+        e_time = normalize_datetime(exam.end_time)
+        if e_time and s_time and e_time <= s_time:
             errors.append("End time must be strictly after start time")
 
         # 6. Must have title and subject
@@ -144,7 +161,8 @@ class ExamService:
                 detail={"message": "Cannot publish exam", "errors": errors}
             )
 
-        exam.status = ExamStatus.ACTIVE
+        now = datetime.now(timezone.utc)
+        exam.status = ExamStatus.SCHEDULED if (s_time and s_time > now) else ExamStatus.ACTIVE
         self.db.commit()
         self.db.refresh(exam)
         logger.info(f"Exam {exam.id} published by {user_id}")
@@ -152,7 +170,7 @@ class ExamService:
 
     def schedule_exam(self, exam_id: uuid.UUID, user_id: uuid.UUID, role: UserRole) -> Exam:
         exam = self.get_exam_by_id(exam_id)
-        if role != UserRole.ADMIN and exam.created_by != user_id:
+        if role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to schedule this exam")
 
         exam.status = ExamStatus.SCHEDULED
@@ -163,7 +181,7 @@ class ExamService:
 
     def archive_exam(self, exam_id: uuid.UUID, user_id: uuid.UUID, role: UserRole) -> Exam:
         exam = self.get_exam_by_id(exam_id)
-        if role != UserRole.ADMIN and exam.created_by != user_id:
+        if role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
         exam.status = ExamStatus.ARCHIVED
@@ -184,7 +202,7 @@ class ExamService:
         return exams, total
 
     def list_exams_for_student(self, student_id: uuid.UUID, skip: int = 0, limit: int = 100) -> tuple[List[Exam], int]:
-        """Students only see ACTIVE or SCHEDULED published exams they are assigned to."""
+        """Students see all exams assigned to them (ACTIVE, SCHEDULED, DRAFT)."""
         from app.models.exam_attempt import ExamAttempt
         
         query = self.db.query(Exam, ExamAttempt).join(
@@ -194,7 +212,7 @@ class ExamService:
             (ExamAttempt.exam_id == Exam.id) & (ExamAttempt.student_id == student_id) & (ExamAttempt.is_deleted == False)
         ).filter(
             Exam.is_deleted == False,
-            Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED]),
+            Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED, ExamStatus.DRAFT]),
             ExamAssignment.student_id == student_id,
             ExamAssignment.is_deleted == False
         )
@@ -216,8 +234,17 @@ class ExamService:
 
     def assign_students_to_exam(self, exam_id: uuid.UUID, student_ids: List[uuid.UUID], faculty_id: uuid.UUID, role: UserRole) -> List[ExamAssignment]:
         exam = self.get_exam_by_id(exam_id)
-        if role != UserRole.ADMIN and exam.created_by != faculty_id:
+        if role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != faculty_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+        # Auto-promote DRAFT exam to ACTIVE/SCHEDULED when faculty assigns students
+        if exam.status == ExamStatus.DRAFT:
+            now = datetime.now(timezone.utc)
+            start_t = normalize_datetime(exam.start_time)
+            if start_t and start_t > now:
+                exam.status = ExamStatus.SCHEDULED
+            else:
+                exam.status = ExamStatus.ACTIVE
 
         assignments = []
         for s_id in student_ids:

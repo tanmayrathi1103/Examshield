@@ -31,7 +31,8 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
       const user = await login({ email, password });
       
       // Role Validation
-      if (user.role !== config.expectedRole) {
+      const isRoleAllowed = user.role === config.expectedRole || (config.expectedRole === 'admin' && user.role === 'super_admin');
+      if (!isRoleAllowed) {
         await logout(); // Discard the token
         setError(`This account belongs to the ${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Portal. Please sign in through the correct portal.`);
         return;

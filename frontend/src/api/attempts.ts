@@ -35,6 +35,7 @@ export interface ExamAttempt {
 
 export interface AttemptSummary {
   id: string;
+  exam_id: string;
   status: string;
   score?: number;
   percentage?: number;

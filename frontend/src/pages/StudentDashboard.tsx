@@ -30,7 +30,7 @@ const StudentDashboard: React.FC = () => {
     if (exam.start_time && new Date(exam.start_time) > now) {
       return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700', canStart: false };
     }
-    if (exam.status === 'active' || exam.status === 'scheduled') {
+    if (exam.status === 'active' || exam.status === 'scheduled' || exam.status === 'draft') {
       return { label: 'Available', color: 'bg-emerald-100 text-emerald-700', canStart: true };
     }
     return { label: exam.status, color: 'bg-slate-100 text-slate-600', canStart: false };

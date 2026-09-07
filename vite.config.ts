@@ -7,6 +7,19 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 4434,
+    host: true,
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
+    },
   },
 })
 // Trigger Vite configuration reload to resolve new dependencies

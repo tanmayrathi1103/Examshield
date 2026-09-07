@@ -54,7 +54,7 @@ def get_verified_user(current_user: User = Depends(get_active_user)) -> User:
     return current_user
 
 def get_current_admin(current_user: User = Depends(get_active_user)) -> User:
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
 
@@ -69,6 +69,6 @@ def get_current_student(current_user: User = Depends(get_active_user)) -> User:
     return current_user
 
 def require_staff(current_user: User = Depends(get_active_user)) -> User:
-    if current_user.role not in (UserRole.ADMIN, UserRole.FACULTY):
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FACULTY):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user

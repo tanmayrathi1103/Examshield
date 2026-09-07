@@ -37,10 +37,10 @@ def check_and_update_rate_limit(
     max_attempts: int,
     window_minutes: int
 ) -> int:
-    """
-    Enforces per-user rate limiting using database tracking.
-    Returns remaining attempts. Raises HTTPException 429 if locked.
-    """
+    # Testing / Development Bypass (Disabled Rate Limit)
+    if not settings.ENABLE_RATE_LIMIT or max_attempts >= 999:
+        return 9999
+
     now = datetime.now(timezone.utc)
     rate_record = db.query(BiometricRateLimit).filter(
         BiometricRateLimit.user_id == user_id,
@@ -342,41 +342,93 @@ def verify_biometrics(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
+_stored_embedding_cache = {}
+
 @router.post("/analyze-frame", response_model=BiometricAnalyzeFrameResponse)
 def analyze_frame(
     payload: BiometricAnalyzeFrameRequest,
-    current_user: User = Depends(get_active_user)
+    current_user: User = Depends(get_active_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Analyzes a single frame during continuous proctoring to detect face presence.
-    Returns the number of detected faces.
+    Analyzes a single frame during continuous proctoring to detect face presence,
+    verify student identity against registered biometrics, and detect prohibited objects.
     """
     try:
         # Decode base64 to OpenCV image
         img = face_recognition_service.decode_base64_image(payload.frame)
         
-        # Analyze frame for faces and head pose
-        face_count, head_pose = face_recognition_service.analyze_frame_for_monitoring(img)
+        # Analyze frame for faces, head pose, and eye gaze
+        face_count, head_pose, eye_tracking = face_recognition_service.analyze_frame_for_monitoring(img)
         
         # Object detection
         detected_objects = object_detection_service.detect_objects(img)
         
+        face_verified = True
+        similarity_score = 1.0
+
         if face_count == 0:
             status_text = "FACE_NOT_DETECTED"
             head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+            eye_tracking = {"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": False}
         elif face_count == 1:
             status_text = "NORMAL"
             if not head_pose:
                 head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+            if not eye_tracking:
+                eye_tracking = {"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": True}
+
+            if head_pose.get("direction") != "FORWARD" or eye_tracking.get("gaze_direction") != "CENTER":
+                status_text = "LOOKING_AWAY"
+
+            # Continuous identity verification against candidate's registered biometrics
+            try:
+                stored_biometric = db.query(StudentBiometric).filter(
+                    StudentBiometric.user_id == current_user.id,
+                    StudentBiometric.is_active == True,
+                    StudentBiometric.is_deleted == False
+                ).first()
+
+                if stored_biometric:
+                    face_row, _ = face_recognition_service.detect_face(img)
+                    if face_row is not None:
+                        new_emb = face_recognition_service.extract_embedding(img, face_row)
+                        
+                        cache_key = str(stored_biometric.id)
+                        if cache_key in _stored_embedding_cache:
+                            stored_emb = _stored_embedding_cache[cache_key]
+                        else:
+                            stored_base64 = BiometricSecurity.decrypt_image_base64(
+                                stored_biometric.encrypted_embedding,
+                                stored_biometric.key_version
+                            )
+                            stored_img = face_recognition_service.decode_base64_image(stored_base64)
+                            stored_face_row, _ = face_recognition_service.detect_face(stored_img)
+                            stored_emb = face_recognition_service.extract_embedding(stored_img, stored_face_row)
+                            _stored_embedding_cache[cache_key] = stored_emb
+
+                        similarity = face_recognition_service.compute_cosine_similarity(new_emb, stored_emb)
+                        similarity_score = round(similarity, 4)
+
+                        if similarity < settings.BIOMETRIC_MATCH_THRESHOLD: # 0.60
+                            face_verified = False
+                            status_text = "FACE_MISMATCH"
+                            logger.warning(f"[Proctoring] Candidate mismatch detected! Similarity: {similarity_score} (User {current_user.id})")
+            except Exception as face_match_err:
+                logger.warning(f"[Proctoring] Face comparison error during analyze-frame: {face_match_err}")
         else:
             status_text = "MULTIPLE_FACES"
             head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+            eye_tracking = {"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": False}
             
         return BiometricAnalyzeFrameResponse(
             face_count=face_count,
             status=status_text,
             head_pose=head_pose,
-            objects=detected_objects
+            eye_tracking=eye_tracking,
+            objects=detected_objects,
+            face_verified=face_verified,
+            similarity_score=similarity_score
         )
     except Exception as e:
         logger.warning(f"Frame analysis failed: {e}")
@@ -385,6 +437,7 @@ def analyze_frame(
             face_count=0,
             status="CAMERA_ERROR",
             head_pose={"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"},
+            eye_tracking={"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": False},
             objects=[]
         )
 

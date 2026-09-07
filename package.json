@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "dev": "cd frontend && vite",
+    "dev:backend": "cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:all": "concurrently --kill-others \"npm run dev\" \"npm run dev:backend\"",
+    "start": "npm run dev:all",
+    "build": "cd frontend && tsc -b && vite build",
+    "lint": "cd frontend && oxlint",
+    "preview": "cd frontend && vite preview"
   },
   "dependencies": {
     "axios": "^1.19.0",

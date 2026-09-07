@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Any, List
 import uuid
+import logging
 
 from app.core.dependencies import get_db, get_current_student
 from app.models.user import User
@@ -15,6 +16,8 @@ from app.schemas.attempt import (
     StudentExamHistoryItem
 )
 from app.services.attempt_service import AttemptService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -176,4 +179,14 @@ def log_attempt_event(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error logging attempt event: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to process event: {str(e)}"
         )

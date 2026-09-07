@@ -41,8 +41,9 @@ export interface ViolationLog {
   studentName: string;
   examTitle: string;
   timestamp: string;
-  type: 'Eye Deviation' | 'Face Missing' | 'Multiple Faces' | 'Phone Detected' | 'Voice Detected' | 'Tab Switched';
+  type: 'Eye Deviation' | 'Face Missing' | 'Multiple Faces' | 'Face Mismatch' | 'Phone Detected' | 'Voice Detected' | 'Tab Switched' | 'Camera Disconnected' | 'Fullscreen Exited' | 'Copy Paste Attempt' | 'Right Click Attempt' | 'Proctor Warning' | 'Announcement';
   severity: 'low' | 'medium' | 'high';
+  attemptId?: string;
   screenshotUrl?: string;
   resolved: boolean;
 }

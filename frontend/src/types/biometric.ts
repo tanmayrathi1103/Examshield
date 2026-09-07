@@ -51,6 +51,13 @@ export interface HeadPose {
   direction: string;
 }
 
+export interface EyeTrackingInfo {
+  gaze_direction: string;
+  gaze_offset_x: number;
+  gaze_offset_y: number;
+  eyes_visible: boolean;
+}
+
 export interface BoundingBox {
   x1: number;
   y1: number;
@@ -68,5 +75,8 @@ export interface BiometricAnalyzeFrameResponse {
   face_count: number;
   status: string;
   head_pose?: HeadPose;
+  eye_tracking?: EyeTrackingInfo;
   objects?: DetectedObject[];
+  face_verified?: boolean;
+  similarity_score?: number;
 }

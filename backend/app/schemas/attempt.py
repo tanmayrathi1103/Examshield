@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, UUID4, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from app.core.enums import AttemptStatus, AttemptEventType
 
@@ -26,12 +26,14 @@ class StudentAnswerResponse(StudentAnswerBase):
     model_config = ConfigDict(from_attributes=True)
 
 class AttemptEventCreate(BaseModel):
-    event_type: AttemptEventType
+    event_type: Union[AttemptEventType, str]
     event_data: Optional[Dict[str, Any]] = None
 
-class AttemptEventResponse(AttemptEventCreate):
+class AttemptEventResponse(BaseModel):
     id: UUID4
     attempt_id: UUID4
+    event_type: Union[AttemptEventType, str]
+    event_data: Optional[Dict[str, Any]] = None
     timestamp: datetime
     
     model_config = ConfigDict(from_attributes=True)
@@ -66,12 +68,13 @@ class ExamAttemptResponse(ExamAttemptBase):
 
 class ExamAttemptSummary(BaseModel):
     id: UUID4
+    exam_id: UUID4
     status: AttemptStatus
-    score: Optional[float]
-    percentage: Optional[float]
+    score: Optional[float] = None
+    percentage: Optional[float] = None
     total_questions: int
     answered_questions: int
-    submitted_at: Optional[datetime]
+    submitted_at: Optional[datetime] = None
     risk_score: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)

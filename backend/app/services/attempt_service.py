@@ -1,8 +1,11 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
-from typing import Optional, List
+from sqlalchemy import select, and_, func
+from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.models.exam_attempt import ExamAttempt
 from app.models.student_answer import StudentAnswer
@@ -281,7 +284,7 @@ class AttemptService:
         else:
             attempt.percentage = 0.0
 
-    def log_event(self, attempt_id: uuid.UUID, student_id: uuid.UUID, event_type: AttemptEventType, event_data: dict) -> AttemptEvent:
+    def log_event(self, attempt_id: uuid.UUID, student_id: uuid.UUID, event_type: Any, event_data: dict) -> AttemptEvent:
         attempt = self.db.get(ExamAttempt, attempt_id)
         if not attempt:
             raise ValueError("Attempt not found")
@@ -290,9 +293,45 @@ class AttemptService:
         if attempt.status != AttemptStatus.IN_PROGRESS:
             raise ValueError(f"Cannot log events for attempt in {attempt.status} state")
 
+        if isinstance(event_type, str):
+            lowered = event_type.lower()
+            if "tab" in lowered or "copy" in lowered or "context" in lowered or "click" in lowered:
+                event_type_enum = AttemptEventType.TAB_SWITCH
+            elif "fullscreen" in lowered:
+                event_type_enum = AttemptEventType.FULLSCREEN_EXIT
+            elif "deviation" in lowered or "gaze" in lowered or "look" in lowered:
+                event_type_enum = AttemptEventType.LOOKING_AWAY
+            elif "phone" in lowered or "mobile" in lowered:
+                event_type_enum = AttemptEventType.PHONE_DETECTED
+            elif "mismatch" in lowered:
+                event_type_enum = AttemptEventType.FACE_MISMATCH
+            elif "multi" in lowered:
+                event_type_enum = AttemptEventType.MULTIPLE_FACES
+            elif "no_face" in lowered or "missing" in lowered:
+                event_type_enum = AttemptEventType.NO_FACE
+            elif "voice" in lowered or "audio" in lowered or "sound" in lowered:
+                event_type_enum = AttemptEventType.VOICE_DETECTED
+            elif "disconnect" in lowered or "disabled" in lowered:
+                event_type_enum = AttemptEventType.CAMERA_DISABLED
+            elif "error" in lowered:
+                event_type_enum = AttemptEventType.CAMERA_ERROR
+            else:
+                try:
+                    event_type_enum = AttemptEventType(lowered)
+                except ValueError:
+                    event_type_enum = AttemptEventType.LOOKING_AWAY
+        else:
+            if isinstance(event_type, AttemptEventType):
+                event_type_enum = event_type
+            else:
+                try:
+                    event_type_enum = AttemptEventType(str(event_type).lower())
+                except Exception:
+                    event_type_enum = AttemptEventType.LOOKING_AWAY
+
         event = AttemptEvent(
             attempt_id=attempt_id,
-            event_type=event_type,
+            event_type=event_type_enum,
             event_data=event_data,
             timestamp=datetime.now(timezone.utc)
         )
@@ -300,17 +339,48 @@ class AttemptService:
         self.db.commit()
         self.db.refresh(event)
 
+        # Query updated total violation count directly from DB
+        current_violation_count = self.db.scalar(
+            select(func.count(AttemptEvent.id)).where(
+                and_(
+                    AttemptEvent.attempt_id == attempt.id,
+                    AttemptEvent.event_type.notin_([
+                        AttemptEventType.STARTED,
+                        AttemptEventType.RESUMED,
+                        AttemptEventType.SUBMITTED,
+                        AttemptEventType.AUTO_SUBMITTED,
+                        AttemptEventType.PROCTORING_STARTED
+                    ])
+                )
+            )
+        ) or 0
+
+        # Update attempt risk score dynamically
+        attempt.risk_score = float(min(100.0, current_violation_count * 10.0))
+        self.db.commit()
+
         # Broadcast real-time violation event to observing proctors
-        severity = event_data.get("severity", "MEDIUM") if isinstance(event_data, dict) else "MEDIUM"
-        ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
-            "type": "VIOLATION_EVENT",
-            "attempt_id": str(attempt.id),
-            "student_id": str(student_id),
-            "event_type": event_type.value,
-            "severity": severity,
-            "timestamp": event.timestamp.isoformat(),
-            "event_data": event_data
-        })
+        try:
+            severity = event_data.get("severity", "MEDIUM") if isinstance(event_data, dict) else "MEDIUM"
+            student = attempt.student or self.db.get(User, student_id)
+            student_name = student.full_name if student else "Student"
+            profile = getattr(student, "student_profile", None) if student else None
+            roll_no = profile.enrollment_number if profile else None
+
+            ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
+                "type": "VIOLATION_EVENT",
+                "attempt_id": str(attempt.id),
+                "student_id": str(student_id),
+                "student_name": student_name,
+                "roll_no": roll_no,
+                "event_type": event_type_enum.value if hasattr(event_type_enum, "value") else str(event_type_enum),
+                "severity": severity,
+                "violations_count": current_violation_count,
+                "timestamp": event.timestamp.isoformat(),
+                "event_data": event_data
+            })
+        except Exception as ws_err:
+            logger.warning(f"Failed to dispatch WebSocket proctor broadcast: {ws_err}")
 
         return event
 
@@ -321,6 +391,7 @@ class AttemptService:
 
         return ExamAttemptSummary(
             id=attempt.id,
+            exam_id=attempt.exam_id,
             status=attempt.status,
             score=attempt.score,
             percentage=attempt.percentage,
@@ -435,23 +506,34 @@ class AttemptService:
                 if isinstance(ev_data, dict):
                     severity = ev_data.get("severity", "medium").lower()
 
-                ev_type_upper = ev.event_type.value.upper()
+                ev_type_val = ev.event_type.value if hasattr(ev.event_type, "value") else str(ev.event_type)
+                ev_type_upper = ev_type_val.upper()
                 if any(k in ev_type_upper for k in ["PHONE", "MULTIPLE", "MISMATCH", "CAMERA_ERROR"]):
                     severity = "high"
 
                 violation_events.append(LiveViolationEvent(
                     id=ev.id,
-                    event_type=ev.event_type.value,
+                    event_type=ev_type_val,
                     severity=severity,
                     timestamp=ev.timestamp,
                     event_data=ev_data
                 ))
 
-            # Total non-lifecycle violations count
-            all_violations_count = sum(
-                1 for e in (attempt.events or [])
-                if e.event_type.value.upper() not in ["STARTED", "RESUMED", "SUBMITTED", "AUTO_SUBMITTED", "PROCTORING_STARTED"]
-            )
+            # Total non-lifecycle violations count directly from DB
+            all_violations_count = self.db.scalar(
+                select(func.count(AttemptEvent.id)).where(
+                    and_(
+                        AttemptEvent.attempt_id == attempt.id,
+                        AttemptEvent.event_type.notin_([
+                            AttemptEventType.STARTED,
+                            AttemptEventType.RESUMED,
+                            AttemptEventType.SUBMITTED,
+                            AttemptEventType.AUTO_SUBMITTED,
+                            AttemptEventType.PROCTORING_STARTED
+                        ])
+                    )
+                )
+            ) or 0
 
             # Integrity score calculation
             if attempt.risk_score is not None:
@@ -513,16 +595,19 @@ class AttemptService:
         self.db.refresh(attempt)
 
         # Broadcast instant status to student channel and proctors
-        ws_manager.dispatch_send_to_student(str(attempt.exam_id), str(attempt.id), {
-            "type": "STATUS_CHANGED",
-            "status": attempt.status.value,
-            "message": f"Your exam attempt has been {attempt.status.value} by the proctor."
-        })
-        ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
-            "type": "SESSION_UPDATED",
-            "attempt_id": str(attempt.id),
-            "status": attempt.status.value
-        })
+        try:
+            ws_manager.dispatch_send_to_student(str(attempt.exam_id), str(attempt.id), {
+                "type": "STATUS_CHANGED",
+                "status": attempt.status.value,
+                "message": f"Your exam attempt has been {attempt.status.value} by the proctor."
+            })
+            ws_manager.dispatch_broadcast_to_proctors(str(attempt.exam_id), {
+                "type": "SESSION_UPDATED",
+                "attempt_id": str(attempt.id),
+                "status": attempt.status.value
+            })
+        except Exception as ws_err:
+            logger.warning(f"Failed to dispatch status update via WebSocket: {ws_err}")
 
         return attempt
 
@@ -545,16 +630,19 @@ class AttemptService:
         self.db.refresh(submitted_attempt)
 
         # Broadcast instant force submission to student channel and proctors
-        ws_manager.dispatch_send_to_student(str(submitted_attempt.exam_id), str(submitted_attempt.id), {
-            "type": "FORCE_SUBMITTED",
-            "status": submitted_attempt.status.value,
-            "message": "Your exam attempt has been force-submitted by the proctor."
-        })
-        ws_manager.dispatch_broadcast_to_proctors(str(submitted_attempt.exam_id), {
-            "type": "SESSION_UPDATED",
-            "attempt_id": str(submitted_attempt.id),
-            "status": submitted_attempt.status.value
-        })
+        try:
+            ws_manager.dispatch_send_to_student(str(submitted_attempt.exam_id), str(submitted_attempt.id), {
+                "type": "FORCE_SUBMITTED",
+                "status": submitted_attempt.status.value,
+                "message": "Your exam attempt has been force-submitted by the proctor."
+            })
+            ws_manager.dispatch_broadcast_to_proctors(str(submitted_attempt.exam_id), {
+                "type": "SESSION_UPDATED",
+                "attempt_id": str(submitted_attempt.id),
+                "status": submitted_attempt.status.value
+            })
+        except Exception as ws_err:
+            logger.warning(f"Failed to dispatch force submit via WebSocket: {ws_err}")
 
         return submitted_attempt
 

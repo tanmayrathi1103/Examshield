@@ -60,19 +60,25 @@ class ObjectDetectionService:
             
             detected_objects = []
             
+            PHONE_LABELS = {
+                "cell phone", "phone", "mobile phone", "telephone",
+                "remote", "laptop", "book", "electronic device"
+            }
+
             for result in results:
                 boxes = result.boxes
                 for box in boxes:
                     confidence = float(box.conf[0])
                     if confidence >= settings.OBJECT_CONFIDENCE_THRESHOLD:
                         class_id = int(box.cls[0])
-                        label = result.names[class_id]
+                        raw_label = str(result.names[class_id])
+                        label_lower = raw_label.lower()
                         
-                        # We specifically want to flag cell phones
-                        if label == target_label or label == "cell phone":
+                        # We specifically flag cell phones and electronic devices
+                        if label_lower in PHONE_LABELS or "phone" in label_lower or "cell" in label_lower or raw_label == target_label:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
                             detected_objects.append({
-                                "label": label,
+                                "label": raw_label,
                                 "confidence": round(confidence, 2),
                                 "bounding_box": {
                                     "x1": x1,

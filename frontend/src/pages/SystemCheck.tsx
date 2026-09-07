@@ -124,7 +124,7 @@ const SystemCheck: React.FC = () => {
     setNetCheck('checking');
     try {
       const start = performance.now();
-      const res = await fetch('http://127.0.0.1:8000/', { method: 'GET', cache: 'no-cache' });
+      const res = await fetch('/api/v1/health', { method: 'GET', cache: 'no-cache' });
       const duration = Math.round(performance.now() - start);
 
       setNetLatency(duration);

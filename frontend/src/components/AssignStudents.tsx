@@ -91,7 +91,8 @@ const AssignStudents: React.FC<AssignStudentsProps> = ({ examId, onClose, onChan
       await loadStudents();
       onChanged();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to assign students');
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : (detail?.message || err.message || 'Failed to assign students'));
     } finally {
       setIsSubmitting(false);
     }
@@ -106,7 +107,8 @@ const AssignStudents: React.FC<AssignStudentsProps> = ({ examId, onClose, onChan
       await loadStudents();
       onChanged();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to remove student');
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : (detail?.message || err.message || 'Failed to remove student'));
     } finally {
       setIsSubmitting(false);
     }

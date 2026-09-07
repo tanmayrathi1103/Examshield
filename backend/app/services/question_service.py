@@ -35,7 +35,7 @@ class QuestionService:
             from app.core.enums import ExamStatus
             if exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Exam is not active")
-        elif role != UserRole.ADMIN and exam.created_by != user_id:
+        elif role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to manage questions for this exam")
         return exam
 

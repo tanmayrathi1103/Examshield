@@ -33,6 +33,12 @@ class HeadPose(BaseModel):
     roll: float
     direction: str
 
+class EyeTrackingInfo(BaseModel):
+    gaze_direction: str
+    gaze_offset_x: float
+    gaze_offset_y: float
+    eyes_visible: bool
+
 class BoundingBox(BaseModel):
     x1: int
     y1: int
@@ -51,7 +57,10 @@ class BiometricAnalyzeFrameResponse(BaseModel):
     face_count: int
     status: str
     head_pose: Optional[HeadPose] = None
+    eye_tracking: Optional[EyeTrackingInfo] = None
     objects: List[DetectedObject] = Field(default_factory=list)
+    face_verified: Optional[bool] = None
+    similarity_score: Optional[float] = None
 
 class BiometricStatusResponse(BaseModel):
     is_registered: bool

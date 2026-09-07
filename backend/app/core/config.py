@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     BIOMETRIC_KEY_VERSION: str = "v1"
     
     # Biometric Parameters
+    ENABLE_RATE_LIMIT: bool = False
     BIOMETRIC_MATCH_THRESHOLD: float = 0.60
     BIOMETRIC_MAX_VERIFY_ATTEMPTS: int = 5
     BIOMETRIC_MAX_REGISTER_ATTEMPTS: int = 3

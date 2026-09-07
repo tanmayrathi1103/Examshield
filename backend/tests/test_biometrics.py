@@ -338,7 +338,8 @@ def test_api_biometrics_rate_limiting_and_window_reset(test_student_session):
     mock_emb = [1.0] + [0.0]*127
     
     with patch.object(face_recognition_service, 'detect_face', return_value=(np.zeros(15), 0.98)), \
-         patch.object(face_recognition_service, 'extract_embedding', return_value=mock_emb):
+         patch.object(face_recognition_service, 'extract_embedding', return_value=mock_emb), \
+         patch.object(settings, 'ENABLE_RATE_LIMIT', True):
          
         img_base64 = generate_synthetic_face_base64()
         

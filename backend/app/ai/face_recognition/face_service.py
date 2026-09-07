@@ -18,10 +18,11 @@ WEIGHTS_DIR = BASE_DIR / "weights"
 YUNET_PATH = str(WEIGHTS_DIR / "face_detection_yunet_2023mar.onnx")
 SFACE_PATH = str(WEIGHTS_DIR / "face_recognition_sface_2021dec.onnx")
 
-# Head Pose Thresholds (Degrees)
-HEAD_YAW_THRESHOLD = 20.0
-HEAD_PITCH_THRESHOLD_UP = 20.0
-HEAD_PITCH_THRESHOLD_DOWN = 15.0
+# Head Pose & Gaze Thresholds (Degrees & Ratios)
+HEAD_YAW_THRESHOLD = 15.0
+HEAD_PITCH_THRESHOLD_UP = 15.0
+HEAD_PITCH_THRESHOLD_DOWN = 12.0
+HEAD_ROLL_THRESHOLD = 15.0
 
 
 class FaceProcessingError(Exception):
@@ -310,8 +311,6 @@ class FaceRecognitionService:
         ], dtype=np.float32)
         
         # YuNet provides landmarks in elements 4-13
-        # Format: (right_eye_x, right_eye_y, left_eye_x, left_eye_y, nose_x, nose_y, right_mouth_x, right_mouth_y, left_mouth_x, left_mouth_y)
-        # Note: In OpenCV, YuNet's "right eye" is the subject's right eye (viewer's left side).
         image_points = np.array([
             [face_row[4], face_row[5]],    # Right eye
             [face_row[6], face_row[7]],    # Left eye
@@ -351,13 +350,14 @@ class FaceRecognitionService:
         
         # Classification (using dominant-axis strategy with a neutral dead-zone)
         direction = "FORWARD"
-        if abs(yaw) > HEAD_YAW_THRESHOLD or abs(pitch) > max(HEAD_PITCH_THRESHOLD_UP, HEAD_PITCH_THRESHOLD_DOWN):
-            if abs(yaw) > abs(pitch):
-                # Dominant axis is Yaw
+        if abs(yaw) > HEAD_YAW_THRESHOLD or abs(pitch) > max(HEAD_PITCH_THRESHOLD_UP, HEAD_PITCH_THRESHOLD_DOWN) or abs(roll) > HEAD_ROLL_THRESHOLD:
+            max_val = max(abs(yaw), abs(pitch), abs(roll))
+            if max_val == abs(yaw):
                 direction = "RIGHT" if yaw > 0 else "LEFT"
-            else:
-                # Dominant axis is Pitch
+            elif max_val == abs(pitch):
                 direction = "DOWN" if pitch > 0 else "UP"
+            else:
+                direction = "TILTED_RIGHT" if roll > 0 else "TILTED_LEFT"
             
         return {
             "yaw": round(yaw, 1),
@@ -366,13 +366,60 @@ class FaceRecognitionService:
             "direction": direction
         }
 
-    def analyze_frame_for_monitoring(self, img: np.ndarray) -> Tuple[int, Optional[Dict[str, Any]]]:
+    def estimate_eye_gaze(self, img: np.ndarray, face_row: np.ndarray) -> Dict[str, Any]:
         """
-        Detects faces and if exactly 1 face is found, estimates head pose.
-        Returns (face_count, head_pose_dict_or_none)
+        Estimates eye gaze vector and direction from YuNet facial landmarks.
+        Format: [4,5]=Right eye, [6,7]=Left eye, [8,9]=Nose tip.
+        """
+        try:
+            r_eye_x, r_eye_y = float(face_row[4]), float(face_row[5])
+            l_eye_x, l_eye_y = float(face_row[6]), float(face_row[7])
+            nose_x, nose_y = float(face_row[8]), float(face_row[9])
+
+            eye_mid_x = (r_eye_x + l_eye_x) / 2.0
+            eye_mid_y = (r_eye_y + l_eye_y) / 2.0
+
+            eye_dist = math.hypot(l_eye_x - r_eye_x, l_eye_y - r_eye_y)
+            if eye_dist < 1.0:
+                eye_dist = 1.0
+
+            # Normalized gaze offsets relative to nose tip
+            gaze_offset_x = round((nose_x - eye_mid_x) / eye_dist, 3)
+            gaze_offset_y = round((nose_y - eye_mid_y) / eye_dist, 3)
+
+            # Determine eye gaze direction
+            gaze_direction = "CENTER"
+            if gaze_offset_x > 0.38:
+                gaze_direction = "LOOKING_RIGHT"
+            elif gaze_offset_x < -0.38:
+                gaze_direction = "LOOKING_LEFT"
+            elif gaze_offset_y > 0.85:
+                gaze_direction = "LOOKING_DOWN"
+            elif gaze_offset_y < 0.20:
+                gaze_direction = "LOOKING_UP"
+
+            return {
+                "gaze_direction": gaze_direction,
+                "gaze_offset_x": gaze_offset_x,
+                "gaze_offset_y": gaze_offset_y,
+                "eyes_visible": True
+            }
+        except Exception as e:
+            logger.warning(f"Eye gaze calculation error: {e}")
+            return {
+                "gaze_direction": "CENTER",
+                "gaze_offset_x": 0.0,
+                "gaze_offset_y": 0.0,
+                "eyes_visible": False
+            }
+
+    def analyze_frame_for_monitoring(self, img: np.ndarray) -> Tuple[int, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """
+        Detects faces and if exactly 1 face is found, estimates head pose and eye gaze.
+        Returns (face_count, head_pose_dict_or_none, eye_tracking_dict_or_none)
         """
         if os.getenv("BYPASS_FACE_DETECTION") == "true":
-            return 1, {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "FORWARD"}
+            return 1, {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "FORWARD"}, {"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": True}
             
         h, w = img.shape[:2]
         
@@ -381,23 +428,32 @@ class FaceRecognitionService:
             _, faces = self.detector.detect(img)
             
             if faces is None or len(faces) == 0:
-                return 0, None
+                return 0, None, None
                 
             # Filter faces by confidence threshold
             confident_faces = [f for f in faces if f[-1] >= 0.55]
             face_count = len(confident_faces)
             
             if face_count == 1:
+                head_pose = None
+                eye_tracking = None
                 try:
                     head_pose = self.estimate_head_pose(img, confident_faces[0])
-                    return face_count, head_pose
                 except Exception as e:
                     logger.warning(f"Head pose estimation error: {e}")
-                    return face_count, {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+                    head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "direction": "UNKNOWN"}
+                
+                try:
+                    eye_tracking = self.estimate_eye_gaze(img, confident_faces[0])
+                except Exception as e:
+                    logger.warning(f"Eye gaze estimation error: {e}")
+                    eye_tracking = {"gaze_direction": "CENTER", "gaze_offset_x": 0.0, "gaze_offset_y": 0.0, "eyes_visible": False}
                     
-            return face_count, None
+                return face_count, head_pose, eye_tracking
+                    
+            return face_count, None, None
             
-        return 0, None
+        return 0, None, None
 
 
 # Global singleton instance

@@ -1,6 +1,7 @@
 import enum
 
 class UserRole(str, enum.Enum):
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     FACULTY = "faculty"
     STUDENT = "student"
@@ -74,7 +75,7 @@ class AttemptEventType(str, enum.Enum):
     PAUSED = "paused"
     SUBMITTED = "submitted"
     AUTO_SUBMITTED = "auto_submitted"
-    # Future AI events
+    # Proctoring & AI events
     FACE_MISMATCH = "face_mismatch"
     MULTIPLE_FACES = "multiple_faces"
     NO_FACE = "no_face"

@@ -1,8 +1,11 @@
 import uuid
+import logging
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.core.dependencies import get_db, get_current_faculty, get_current_student, get_current_user, get_current_admin
 from app.models.user import User
@@ -130,7 +133,13 @@ def assign_students(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff)
 ) -> Any:
-    return ExamService(db).assign_students_to_exam(exam_id, req.student_ids, current_user.id, current_user.role)
+    try:
+        return ExamService(db).assign_students_to_exam(exam_id, req.student_ids, current_user.id, current_user.role)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning students to exam {exam_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{exam_id}/students/{student_id}", status_code=status.HTTP_204_NO_CONTENT)

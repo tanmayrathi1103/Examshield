@@ -43,7 +43,7 @@ async def ws_proctor_endpoint(
 ):
     """WebSocket stream for faculty proctors to receive live student telemetry and violations."""
     user = authenticate_ws_user(token, db)
-    if not user or user.role not in [UserRole.FACULTY, UserRole.ADMIN]:
+    if not user or user.role not in [UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         logger.warning(f"[WS] Unauthorized proctor connection attempt for exam {exam_id}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

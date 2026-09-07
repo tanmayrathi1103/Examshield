@@ -37,18 +37,20 @@ const DashboardLayout: React.FC = () => {
     }
   }, [violations, lastViolationId]);
 
+  const isLiveExam = location.pathname.startsWith('/student/exam/') && location.pathname.endsWith('/live');
+
   return (
     <div className="flex bg-slate-50 min-h-screen">
-      <Sidebar />
+      {!isLiveExam && <Sidebar />}
       <div className="flex-1 flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-grow p-6 md:p-8 max-w-7xl w-full mx-auto">
+        {!isLiveExam && <Navbar />}
+        <main className={isLiveExam ? "flex-grow p-0 w-full" : "flex-grow p-6 md:p-8 max-w-7xl w-full mx-auto"}>
           <Outlet />
         </main>
       </div>
 
       {/* Real-time AI Violation Warning Toast */}
-      {location.pathname.includes('/live') && (
+      {isLiveExam && (
         <AnimatePresence>
           {toast && (
             <motion.div 

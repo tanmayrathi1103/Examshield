@@ -33,8 +33,9 @@ export const useExamWebSocket = ({
       wsRef.current.close();
     }
 
-    const host = window.location.hostname || 'localhost';
-    const wsBaseUrl = `ws://${host}:8000`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsBaseUrl = `${protocol}//${host}`;
     const fullUrl = `${wsBaseUrl}${path}?token=${encodeURIComponent(token)}`;
 
     setConnectionStatus('connecting');
