@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cd frontend && vite",
-    "dev:backend": "cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:backend": "cd backend && .\\venv\\Scripts\\activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
     "dev:all": "concurrently --kill-others \"npm run dev\" \"npm run dev:backend\"",
     "start": "npm run dev:all",
     "build": "cd frontend && tsc -b && vite build",
@@ -31,6 +31,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "autoprefixer": "^10.5.2",
+    "concurrently": "^10.0.5",
     "oxlint": "^1.71.0",
     "postcss": "^8.5.16",
     "tailwindcss": "^4.3.2",

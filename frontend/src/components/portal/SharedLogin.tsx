@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Mail, Lock, ArrowRight, ChevronRight, Home } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Mail, Lock, ArrowRight, ChevronRight, Home, Fingerprint, ShieldCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { PortalConfig } from '../../config/portalConfig';
 import { navigateAfterLogin } from '../../utils/portalNavigator';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,7 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isFocused, setIsFocused] = useState<'email' | 'password' | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,21 +31,16 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
     try {
       const user = await login({ email, password });
       
-      // Role Validation
       const isRoleAllowed = user.role === config.expectedRole || (config.expectedRole === 'admin' && user.role === 'super_admin');
       if (!isRoleAllowed) {
-        await logout(); // Discard the token
+        await logout();
         setError(`This account belongs to the ${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Portal. Please sign in through the correct portal.`);
         return;
       }
       
-      // Remember last portal
       localStorage.setItem('lastUsedPortal', config.id);
-
-      // Future compatibility: Post-login flow handled by portalNavigator
       navigateAfterLogin(config, navigate);
     } catch (err: any) {
-      // Error is already handled and stored in authError by the hook
       console.error('Login failed', err);
     }
   };
@@ -53,81 +49,134 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
   const Icon = config.icon;
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-6">
+    <div className="flex flex-col items-center justify-center py-8 px-4 relative w-full h-full min-h-[calc(100vh-160px)] z-10">
       
-      {/* Breadcrumbs */}
-      <div className="w-full max-w-md mb-6 flex items-center text-sm font-semibold text-slate-500">
-        <Link to="/" className="hover:text-indigo-600 transition-colors flex items-center gap-1"><Home className="w-4 h-4" /> Home</Link>
-        <ChevronRight className="w-4 h-4 mx-1 opacity-50" />
-        <Link to="/login" className="hover:text-indigo-600 transition-colors">Portals</Link>
-        <ChevronRight className="w-4 h-4 mx-1 opacity-50" />
-        <span className={`text-${config.theme.primary}`}>{config.title}</span>
-      </div>
-
       <motion.div 
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md glass p-8 rounded-3xl border border-white/50 shadow-2xl bg-white/75 relative"
+        initial={{ opacity: 0, y: 30, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, type: "spring", bounce: 0.3 }}
+        className="w-full max-w-4xl flex flex-col md:flex-row rounded-[2rem] border border-white/80 shadow-2xl shadow-indigo-900/10 overflow-hidden bg-white/70 backdrop-blur-xl relative"
       >
-        <div className="flex flex-col items-center mt-2 mb-8">
-          <div className={`w-12 h-12 ${config.theme.iconBg} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg ${config.theme.shadow}`}>
-            <Icon className="w-6 h-6" />
+        {/* Left Branding Pane */}
+        <div className={`w-full md:w-5/12 bg-${config.theme.primary} p-10 flex flex-col justify-between relative overflow-hidden text-white border-r border-white/20`}>
+          {/* Decorative Rings */}
+          <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full border-[20px] border-white/10 opacity-50" />
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full border-[10px] border-white/10 opacity-50" />
+          
+          <div className="relative z-10">
+            <Link to="/" className="inline-flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
+              <div className="w-8 h-8 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center">
+                <Home className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-sm font-semibold tracking-wide uppercase">Return Home</span>
+            </Link>
+
+            <motion.div 
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="w-16 h-16 bg-white text-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl"
+            >
+              <Icon className={`w-8 h-8 text-${config.theme.primary}`} />
+            </motion.div>
+            
+            <h2 className="text-4xl font-extrabold tracking-tight mb-3">{config.title}</h2>
+            <p className="text-white/80 font-medium leading-relaxed">{config.subtitle}</p>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">{config.title}</h2>
-          <p className="text-sm text-slate-500 mt-1 text-center px-4">{config.subtitle}</p>
+
+          <div className="relative z-10 mt-12 bg-white/10 backdrop-blur-md p-5 rounded-2xl border border-white/20 flex items-start gap-3">
+            <ShieldCheck className="w-6 h-6 text-white shrink-0 mt-0.5" />
+            <p className="text-xs text-white/90 font-medium">Secured by AI-Powered Behavioral Analysis and telemetry tracking.</p>
+          </div>
         </div>
 
-        {displayError && (
-          <div className="mb-6 p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-100 flex items-start text-left">
-            <span className="mt-0.5">{displayError}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-              <input 
-                type="email"
-                placeholder="name@examshield.ai"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                className="w-full bg-slate-100/50 hover:bg-slate-100 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 py-3 pl-12 pr-4 rounded-xl text-sm font-semibold transition-all focus:outline-none"
-                required
-              />
-            </div>
+        {/* Right Form Pane */}
+        <div className="w-full md:w-7/12 p-10 md:p-14 bg-white/90 relative z-10">
+          <div className="mb-8">
+            <h3 className="text-2xl font-bold text-slate-800">Welcome Back</h3>
+            <p className="text-slate-500 text-sm font-medium mt-1">Please enter your credentials to access your portal.</p>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center px-1">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Password</label>
-              <a href="/forgot-password" className="text-xs font-semibold text-indigo-600 hover:underline">Forgot?</a>
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-              <input 
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-100/50 hover:bg-slate-100 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 py-3 pl-12 pr-4 rounded-xl text-sm font-semibold transition-all focus:outline-none"
-                required
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className={`w-full py-3.5 ${config.theme.iconBg} text-white rounded-xl font-bold text-sm transition-all shadow-lg ${config.theme.shadow} flex items-center justify-center gap-2 ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:brightness-110 hover:shadow-xl'}`}
-          >
-            {isLoading ? 'Verifying Account...' : (
-              <>Sign In <ArrowRight className="w-4 h-4" /></>
+          <AnimatePresence>
+            {displayError && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, y: -10 }}
+                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="mb-6 p-4 bg-rose-50 text-rose-700 text-sm font-semibold rounded-xl border border-rose-100 flex items-start shadow-sm"
+              >
+                <span>{displayError}</span>
+              </motion.div>
             )}
-          </button>
-        </form>
+          </AnimatePresence>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <motion.div 
+              className="space-y-2"
+              animate={{ x: isFocused === 'email' ? 4 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <label className={`text-xs font-bold uppercase tracking-wider pl-1 transition-colors ${isFocused === 'email' ? `text-${config.theme.primary}` : 'text-slate-500'}`}>Email Address</label>
+              <div className="relative group">
+                <Mail className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${isFocused === 'email' ? `text-${config.theme.primary}` : 'text-slate-400'}`} />
+                <input 
+                  type="email"
+                  placeholder="name@examshield.ai"
+                  value={email}
+                  onFocus={() => setIsFocused('email')}
+                  onBlur={() => setIsFocused(null)}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                  className={`w-full bg-slate-50 hover:bg-slate-100 focus:bg-white border-2 border-slate-200 focus:border-${config.theme.primary} py-3.5 pl-12 pr-4 rounded-xl text-sm font-semibold transition-all focus:outline-none shadow-sm`}
+                  required
+                />
+              </div>
+            </motion.div>
+
+            <motion.div 
+              className="space-y-2"
+              animate={{ x: isFocused === 'password' ? 4 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="flex justify-between items-center px-1">
+                <label className={`text-xs font-bold uppercase tracking-wider transition-colors ${isFocused === 'password' ? `text-${config.theme.primary}` : 'text-slate-500'}`}>Password</label>
+                <a href="/forgot-password" className={`text-xs font-bold text-${config.theme.primary} hover:underline`}>Forgot?</a>
+              </div>
+              <div className="relative group">
+                <Lock className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${isFocused === 'password' ? `text-${config.theme.primary}` : 'text-slate-400'}`} />
+                <input 
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onFocus={() => setIsFocused('password')}
+                  onBlur={() => setIsFocused(null)}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full bg-slate-50 hover:bg-slate-100 focus:bg-white border-2 border-slate-200 focus:border-${config.theme.primary} py-3.5 pl-12 pr-4 rounded-xl text-sm font-semibold transition-all focus:outline-none shadow-sm`}
+                  required
+                />
+              </div>
+            </motion.div>
+
+            <motion.button 
+              whileHover={{ scale: 1.01, y: -2 }}
+              whileTap={{ scale: 0.99 }}
+              type="submit" 
+              disabled={isLoading}
+              className={`w-full mt-6 py-4 bg-${config.theme.primary} text-white rounded-xl font-extrabold text-sm transition-all shadow-lg hover:shadow-xl hover:opacity-90 flex items-center justify-center gap-2 ${isLoading ? 'opacity-75 cursor-not-allowed' : ''}`}
+            >
+              {isLoading ? (
+                <>
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="w-5 h-5" />
+                  Access Portal <ArrowRight className="w-4 h-4 ml-1" />
+                </>
+              )}
+            </motion.button>
+          </form>
+        </div>
       </motion.div>
     </div>
   );

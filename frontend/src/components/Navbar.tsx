@@ -82,28 +82,23 @@ const Navbar: React.FC = () => {
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
         </button>
 
-        <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
-          <div className="text-right hidden sm:block">
-            <div className="text-sm font-bold text-slate-800">
+        <div className="flex items-center gap-4 pl-4 border-l border-slate-200/80">
+          <div className="text-right hidden sm:flex flex-col items-end justify-center">
+            <div className="text-sm font-extrabold text-slate-900 tracking-tight leading-none mb-1.5">
               {currentUser?.full_name || 'User'}
             </div>
-            <div className="text-xs text-slate-400 font-medium capitalize">{userRole}</div>
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
-            {userRole.charAt(0).toUpperCase()}
+            <div className="inline-flex items-center justify-center px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[9px] font-black uppercase tracking-widest border border-indigo-100/50 shadow-sm">
+              {userRole}
+            </div>
           </div>
           
-          {/* Logout Button */}
-          <button 
-            onClick={async () => {
-              await logout();
-              navigate('/login');
-            }}
-            className="ml-2 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all"
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="relative group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-indigo-500/30 ring-2 ring-white transition-transform duration-300 group-hover:scale-105">
+              {currentUser?.full_name ? currentUser.full_name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full shadow-sm z-10" />
+          </div>
+          
         </div>
       </div>
     </header>

@@ -71,86 +71,75 @@ const StudentDashboard: React.FC = () => {
             return (
               <div
                 key={exam.id}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 overflow-hidden flex flex-col"
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col"
               >
-                {/* Top color stripe based on status */}
-                <div className={`h-1.5 w-full ${statusCfg.canStart ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                {/* Clean Top Status Strip */}
+                <div className={`h-1.5 w-full rounded-t-2xl ${statusCfg.canStart ? 'bg-indigo-600' : 'bg-slate-300'}`} />
 
-                <div className="p-6 flex flex-col flex-1 space-y-4">
-                  {/* Title & Status */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-extrabold text-slate-800 leading-tight text-base">{exam.title}</h3>
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">{exam.exam_code} • {exam.subject}</p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${statusCfg.color}`}>
+                <div className="p-6 flex flex-col flex-1">
+                  {/* Status Badge */}
+                  <div className="flex justify-between items-start mb-4">
+                    <span className={`text-[11px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full ${statusCfg.color}`}>
                       {statusCfg.label}
                     </span>
                   </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
-                        <Clock className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Duration</div>
-                        <div className="text-xs font-bold text-slate-700">{exam.duration_minutes} min</div>
-                      </div>
+                  {/* Clean Typography */}
+                  <h3 className="font-bold text-slate-900 text-lg leading-tight mb-1">{exam.title}</h3>
+                  <p className="text-sm text-slate-500 font-medium mb-6">{exam.exam_code} • {exam.subject}</p>
+
+                  {/* Minimal Info Row */}
+                  <div className="flex items-center gap-6 mb-6">
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm font-semibold">{exam.duration_minutes} min</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
-                        <Award className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Marks</div>
-                        <div className="text-xs font-bold text-slate-700">{exam.total_marks}</div>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Award className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm font-semibold">{exam.total_marks} marks</span>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-2 text-xs text-slate-500">
-                    <Calendar className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                  <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
+                    <Calendar className="w-4 h-4 text-slate-400" />
                     <span className="font-medium">{formatDate(exam.start_time)}</span>
                   </div>
 
-                  {/* Action Button */}
-                  <div className="mt-auto pt-2">
+                  {/* Classic Solid Button */}
+                  <div className="mt-auto">
                     {exam.student_attempt_status && ['submitted', 'auto_submitted', 'evaluated'].includes(exam.student_attempt_status) ? (
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => exam.student_attempt_id ? navigate(`/student/exam/${exam.id}/result?attemptId=${exam.student_attempt_id}`) : undefined}
-                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors"
+                          className="flex-1 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors border border-emerald-200"
                         >
-                          <CheckCircle className="w-3.5 h-3.5" /> Result
+                          <CheckCircle className="w-4 h-4" /> Result
                         </button>
                         <button
                           onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}
-                          className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm hover:-translate-y-0.5"
-                          title="Start a fresh attempt for this assessment"
+                          className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors shadow-sm"
                         >
-                          <Play className="w-3.5 h-3.5" /> Retake
+                          <Play className="w-4 h-4" /> Retake
                         </button>
                       </div>
                     ) : statusCfg.canStart ? (
                       <button
                         onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/10 hover:-translate-y-0.5"
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors shadow-sm"
                       >
                         <Play className="w-4 h-4" /> {exam.student_attempt_status && ['in_progress', 'paused'].includes(exam.student_attempt_status) ? 'Resume Exam' : 'Start Exam'}
                       </button>
                     ) : exam.start_time && new Date(exam.start_time) > new Date() ? (
                       <button
                         disabled
-                        className="w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                        className="w-full py-3 bg-slate-50 text-slate-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2 border border-slate-200 cursor-not-allowed"
                       >
                         <Calendar className="w-4 h-4" /> Opens {formatDate(exam.start_time)}
                       </button>
                     ) : (
                       <button
                         disabled
-                        className="w-full py-3 bg-rose-50 text-rose-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                        className="w-full py-3 bg-rose-50 text-rose-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2 border border-rose-100 cursor-not-allowed"
                       >
                         <AlertCircle className="w-4 h-4" /> Exam Expired
                       </button>

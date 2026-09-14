@@ -61,176 +61,182 @@ const FaceVerification: React.FC = () => {
   const exam = currentExam;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 pb-12">
-      {/* Header */}
-      <div className="space-y-1">
-        <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Face Verification</h1>
-        <p className="text-sm text-slate-500">
-          {examId ? (
-            <>Proctoring identity check for: <span className="font-bold text-indigo-600">{exam?.title || 'Active Examination'}</span></>
-          ) : (
-            <>General-purpose biometric identity check</>
-          )}
-        </p>
-      </div>
+    <div className="w-full h-full min-h-[80vh] flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-xl bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 p-6 sm:p-8 relative overflow-hidden flex flex-col items-center">
+        
+        {/* Subtle Background Accent */}
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-8 flex flex-col items-center relative overflow-hidden">
-        {!faceVerified ? (
-          <div className="w-full flex flex-col items-center space-y-6">
-            
-            {/* Error Notification with Retries Count */}
-            <AnimatePresence>
-              {(error || cameraError) && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="w-full max-w-md p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-700 text-xs font-semibold"
-                >
-                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                  <div className="flex-1 space-y-1">
-                    <p>{error || cameraError}</p>
-                    <div className="flex items-center justify-between text-[11px] text-rose-600 font-bold pt-1 border-t border-rose-200/60">
-                      <span>Attempts remaining: {retriesLeft} of 5</span>
-                      {similarityScore !== null && (
-                        <span>Match score: {(similarityScore * 100).toFixed(1)}% (Threshold: 60%)</span>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Circular Camera Preview Frame */}
-            <div className="relative w-80 h-80 rounded-full border-4 border-dashed border-indigo-600/40 p-2 flex items-center justify-center bg-slate-900 overflow-hidden shadow-2xl shadow-indigo-600/10">
-              <div className="absolute inset-4 rounded-full border-2 border-indigo-400 flex items-center justify-center overflow-hidden bg-black">
-                {/* Live Video */}
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover transform -scale-x-100 ${!cameraActive ? 'hidden' : ''}`}
-                />
-
-                {/* Laser Scanning Animation */}
-                {cameraActive && (
-                  <div className="w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scan absolute top-0 z-10 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                )}
-
-                {/* Camera Inactive State */}
-                {!cameraActive && (
-                  <div className="flex flex-col items-center gap-2 text-slate-400 p-4 text-center">
-                    <Camera className="w-10 h-10 text-slate-500 animate-pulse" />
-                    <span className="text-xs font-semibold">Starting camera feed...</span>
-                  </div>
-                )}
-
-                {/* Verifying Overlay */}
-                {isLoading && (
-                  <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-white z-20 p-4 text-center">
-                    <Loader2 className="w-9 h-9 animate-spin text-indigo-400" />
-                    <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider">Verifying Biometrics</p>
-                    <p className="text-[11px] text-slate-400">Comparing cosine similarity...</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Instruction Prompt */}
-            <div className="text-center max-w-sm space-y-1">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center justify-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-500" />
-                Position Face in Center
-              </h3>
-              <p className="text-xs text-slate-400">
-                Hold your head steady inside the circle and face the camera directly with good lighting.
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="w-full max-w-md space-y-3">
-              <button
-                onClick={handleVerify}
-                disabled={isLoading || !cameraActive}
-                className={`w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-sm shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 ${
-                  isLoading || !cameraActive ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'
-                }`}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Comparing Facenet Embeddings...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="w-4 h-4" />
-                    Start Scan & Verify Face
-                  </>
-                )}
-              </button>
-
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-                <Lock className="w-3 h-3 text-slate-400" />
-                <span>Protected by AES-256 encrypted biometric template</span>
-              </div>
-            </div>
-
+        <div className="relative z-10 w-full flex flex-col items-center">
+          
+          {/* Header Typography */}
+          <div className="text-center mb-8 space-y-1">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+              Identity Verification
+            </h1>
+            <p className="text-sm font-medium text-slate-500">
+              {exam?.title ? `Secure session: ${exam.title}` : 'AI Security Protocols Active'}
+            </p>
           </div>
-        ) : (
-          /* Step 2: Verification Successful */
-          <div className="w-full flex flex-col items-center py-6 space-y-6">
-            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-inner">
-              <CheckCircle2 className="w-10 h-10 animate-bounce" />
-            </div>
 
-            <div className="text-center space-y-2 max-w-md">
-              <h3 className="text-2xl font-extrabold text-slate-800">Biometric Verification Successful</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                AI facial recognition has verified your live identity against your registered biometric template.
-              </p>
-            </div>
+          <div className="w-full flex flex-col items-center justify-center">
+            
+            {!faceVerified ? (
+              <div className="w-full flex flex-col items-center space-y-6">
+                
+                {/* Error Notifications */}
+                <AnimatePresence>
+                  {(error || cameraError) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                      className="w-full max-w-sm p-3 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-700 text-sm font-medium"
+                    >
+                      <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-xs">{error || cameraError}</p>
+                        <div className="flex items-center justify-between text-[10px] text-rose-600/80 font-bold uppercase tracking-wider pt-2 border-t border-rose-100/50">
+                          <span>Attempts: {retriesLeft}/5</span>
+                          {similarityScore !== null && (
+                            <span>Score: {(similarityScore * 100).toFixed(1)}%</span>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            {similarityScore !== null && (
-              <div className="flex items-center gap-3 px-4 py-2 bg-emerald-50 text-emerald-800 rounded-2xl border border-emerald-200 text-xs font-semibold">
-                <span>Identity Match Confidence:</span>
-                <span className="px-2 py-0.5 bg-emerald-600 text-white text-[11px] font-bold rounded-lg">
-                  {(similarityScore * 100).toFixed(1)}% Match
-                </span>
+                {/* Clean Circular Camera Frame */}
+                <div className="relative w-48 h-48 md:w-56 md:h-56 rounded-full p-1.5 bg-slate-50 border border-slate-100 shadow-inner">
+                  <div className="relative w-full h-full rounded-full bg-slate-900 overflow-hidden flex items-center justify-center ring-1 ring-black/5 shadow-2xl">
+                    {/* Background Grid Pattern (Always visible in dark circle) */}
+                    <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`absolute inset-0 w-full h-full object-cover transform -scale-x-100 transition-opacity duration-700 z-10 ${!cameraActive ? 'opacity-0' : 'opacity-100'}`}
+                    />
+
+                    {/* Scanning Laser Line Overlay */}
+                    {cameraActive && !isLoading && (
+                      <div className="absolute left-0 right-0 h-1 bg-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.8)] z-20 animate-[scan_3s_ease-in-out_infinite]" />
+                    )}
+
+                    {/* Sleek Minimalist Scanning Ring */}
+                    {cameraActive && (
+                      <div className="absolute inset-0 rounded-full border-[3px] border-indigo-500/30 shadow-[inset_0_0_25px_rgba(99,102,241,0.3)] z-20" />
+                    )}
+
+                    {/* Inactive State */}
+                    {!cameraActive && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-4 text-center z-10">
+                        <Camera className="w-8 h-8 text-indigo-400/80 animate-pulse" strokeWidth={1.5} />
+                        <span className="text-xs font-black tracking-[0.2em] uppercase text-indigo-200/90 animate-pulse drop-shadow-md">Initializing</span>
+                      </div>
+                    )}
+
+                    {/* Verifying Overlay */}
+                    {isLoading && (
+                      <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-white z-20">
+                        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+                        <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest animate-pulse">Scanning</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="text-center max-w-xs space-y-1">
+                  <h3 className="font-semibold text-slate-800 text-sm">
+                    Position your face in the circle
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Ensure clear lighting and face the camera directly.
+                  </p>
+                </div>
+
+                {/* Action Button */}
+                <div className="w-full max-w-sm pt-2">
+                  <button
+                    onClick={handleVerify}
+                    disabled={isLoading || !cameraActive}
+                    className={`group relative w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-sm transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 ${
+                      isLoading || !cameraActive ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4 text-slate-400" /> Scan & Verify
+                      </>
+                    )}
+                  </button>
+                  <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                    <Lock className="w-3 h-3" /> Secure Biometric Scan
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              /* Verification Successful */
+              <div className="w-full flex flex-col items-center py-6 space-y-6">
+                <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-inner border border-emerald-100">
+                  <CheckCircle2 className="w-10 h-10 animate-bounce" />
+                </div>
+
+                <div className="text-center space-y-2">
+                  <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight">Access Granted</h3>
+                  <p className="text-sm text-slate-500 font-medium">
+                    Your identity has been securely verified.
+                  </p>
+                </div>
+
+                {similarityScore !== null && (
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-600">
+                    <span>Match Confidence:</span>
+                    <span className="text-emerald-600 font-bold">
+                      {(similarityScore * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex flex-col w-full max-w-sm gap-2.5 pt-4">
+                  {examId ? (
+                    <button
+                      onClick={handleStartExam}
+                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-sm transition-all duration-300 shadow-lg shadow-emerald-600/20 active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Start Examination
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/student/dashboard')}
+                      className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-sm transition-all duration-300 shadow-lg shadow-slate-900/20 active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Enter Portal
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setFaceVerified(false);
+                      startCamera();
+                    }}
+                    className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold rounded-2xl text-xs transition-colors flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Re-verify Identity
+                  </button>
+                </div>
               </div>
             )}
-
-            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm pt-2">
-              <button
-                onClick={() => {
-                  setFaceVerified(false);
-                  startCamera();
-                }}
-                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Re-verify
-              </button>
-              {examId ? (
-                <button
-                  onClick={handleStartExam}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition-all shadow-xl shadow-emerald-500/20 hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Initialize Exam Environment
-                </button>
-              ) : (
-                <button
-                  onClick={() => navigate('/student/dashboard')}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs transition-all shadow-xl shadow-indigo-600/20 hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Return to Dashboard
-                </button>
-              )}
-            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

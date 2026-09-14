@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 import { AlertTriangle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import FloatingIconsBackground from '../components/FloatingIconsBackground';
 
 const DashboardLayout: React.FC = () => {
   const { userRole, violations } = useApp();
@@ -48,9 +49,10 @@ const DashboardLayout: React.FC = () => {
   const isLiveExam = location.pathname.startsWith('/student/exam/') && location.pathname.endsWith('/live');
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-slate-50 h-screen w-full relative overflow-hidden">
+      {!isLiveExam && <FloatingIconsBackground count={120} />}
       {!isLiveExam && <Sidebar />}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto relative z-10">
         {!isLiveExam && <Navbar />}
         <main className={isLiveExam ? "flex-grow p-0 w-full" : "flex-grow p-6 md:p-8 max-w-7xl w-full mx-auto"}>
           <Outlet />

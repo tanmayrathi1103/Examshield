@@ -81,13 +81,15 @@ function App() {
             <Route path="about" element={<About />} />
             <Route path="features" element={<Features />} />
             <Route path="contact" element={<Contact />} />
-            <Route path="login" element={<PortalSelection />} />
-            <Route path="login/student" element={<StudentLogin />} />
-            <Route path="login/faculty" element={<FacultyLogin />} />
-            <Route path="login/admin" element={<AdminLogin />} />
             <Route path="register" element={<Register />} />
             <Route path="forgot-password" element={<ForgotPassword />} />
           </Route>
+
+          {/* Standalone Login Routes (No Global Navbar) */}
+          <Route path="login" element={<PortalSelection />} />
+          <Route path="login/student" element={<StudentLogin />} />
+          <Route path="login/faculty" element={<FacultyLogin />} />
+          <Route path="login/admin" element={<AdminLogin />} />
 
           {/* Dashboard Routes (Student, Faculty, Admin sharing DashboardLayout) */}
           <Route path="/" element={<DashboardLayout />}>
