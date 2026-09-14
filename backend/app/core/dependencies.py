@@ -59,12 +59,12 @@ def get_current_admin(current_user: User = Depends(get_active_user)) -> User:
     return current_user
 
 def get_current_faculty(current_user: User = Depends(get_active_user)) -> User:
-    if current_user.role != UserRole.FACULTY:
+    if current_user.role not in (UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
 
 def get_current_student(current_user: User = Depends(get_active_user)) -> User:
-    if current_user.role != UserRole.STUDENT:
+    if current_user.role not in (UserRole.STUDENT, UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
 

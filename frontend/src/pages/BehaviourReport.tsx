@@ -26,7 +26,7 @@ const BehaviourReport: React.FC = () => {
   const isStaffView = Boolean(studentId);
 
   const handleBack = () => {
-    if (isStaffView) {
+    if (isStaffView || window.location.pathname.startsWith('/faculty')) {
       navigate('/faculty/student-reports');
     } else {
       navigate('/student/history');

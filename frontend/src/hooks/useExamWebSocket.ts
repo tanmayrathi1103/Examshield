@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getAuthToken } from '../api/axios';
 
 export type WSConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -23,9 +24,8 @@ export const useExamWebSocket = ({
   const pingIntervalRef = useRef<any>(null);
   const isUnmountedRef = useRef(false);
 
-  const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-
   const connect = useCallback(() => {
+    const token = getAuthToken(path);
     if (!enabled || !path || !token) return;
 
     // Clean up existing connection
@@ -94,7 +94,7 @@ export const useExamWebSocket = ({
       console.error('[WebSocket] Connection creation failed:', err);
       setConnectionStatus('error');
     }
-  }, [path, enabled, token, reconnectInterval, onMessage]);
+  }, [path, enabled, reconnectInterval, onMessage]);
 
   useEffect(() => {
     isUnmountedRef.current = false;

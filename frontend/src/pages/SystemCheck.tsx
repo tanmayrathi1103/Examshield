@@ -85,23 +85,47 @@ const SystemCheck: React.FC = () => {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+
       const source = audioCtx.createMediaStreamSource(audioStream);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.3;
       source.connect(analyser);
 
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+      const freqBins = analyser.frequencyBinCount;
+      const freqArray = new Uint8Array(freqBins);
+      const timeArray = new Uint8Array(analyser.fftSize);
 
+      let smoothedVol = 0;
       const checkVolume = () => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
+        if (!audioContextRef.current) return;
+
+        // Waveform RMS
+        analyser.getByteTimeDomainData(timeArray);
+        let sumSquares = 0;
+        for (let i = 0; i < timeArray.length; i++) {
+          const val = (timeArray[i] - 128) / 128;
+          sumSquares += val * val;
         }
-        const avg = sum / bufferLength;
-        const normalized = Math.min(100, Math.round((avg / 128) * 100));
-        setMicVolume(normalized);
+        const rms = Math.sqrt(sumSquares / timeArray.length);
+        const rmsVol = Math.min(100, Math.round(rms * 280));
+
+        // Vocal spectrum
+        analyser.getByteFrequencyData(freqArray);
+        let vocalSum = 0;
+        const vocalEnd = Math.min(38, freqBins);
+        for (let i = 1; i < vocalEnd; i++) {
+          vocalSum += freqArray[i];
+        }
+        const vocalVol = Math.min(100, Math.round((vocalSum / ((vocalEnd - 1) * 128)) * 120));
+
+        const instant = Math.min(100, Math.max(rmsVol, vocalVol));
+        smoothedVol = Math.round(smoothedVol * 0.65 + instant * 0.35);
+        setMicVolume(smoothedVol);
+
         animFrameRef.current = requestAnimationFrame(checkVolume);
       };
       checkVolume();

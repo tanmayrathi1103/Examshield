@@ -47,8 +47,8 @@ export const useProctoringMonitor = (
     const now = Date.now();
     const lastTime = lastEventTimeRef.current[eventType] || 0;
     
-    // High-priority cheating events (face mismatch, phone, multiple faces, missing face) trigger every 3s
-    const cooldownMs = ['face_mismatch', 'multiple_faces', 'phone_detected', 'no_face'].includes(eventType) ? 3000 : 12000;
+    // High-priority cheating events trigger every 3-4s (face mismatch, phone, voice, multiple faces, missing face)
+    const cooldownMs = ['face_mismatch', 'multiple_faces', 'phone_detected', 'no_face', 'voice_detected'].includes(eventType) ? 4000 : 12000;
 
     if (now - lastTime > cooldownMs) {
       lastEventTimeRef.current[eventType] = now;
@@ -267,15 +267,38 @@ export const useProctoringMonitor = (
     return () => clearInterval(interval);
   }, [examId, attemptId, cameraActive, captureFrame, logEventIfReady]);
 
-  // Audio Monitoring Effect (Web Audio API AnalyserNode)
+  // Audio Monitoring Effect (Advanced Multi-Metric Acoustic & Voice Detection Engine)
   useEffect(() => {
     if (!attemptId) return;
 
     let isSubscribed = true;
+    let smoothedVolume = 0;
+    let noiseAccumulatorMs = 0;
+    let lastAnalyzeTime = performance.now();
+    let voiceCooldownUntil = 0;
+    let speechRecognitionInstance: any = null;
+
+    const resumeAudioContext = async (ctx: AudioContext | null) => {
+      if (ctx && ctx.state === 'suspended') {
+        try {
+          await ctx.resume();
+          console.log('[Proctoring Audio] AudioContext resumed successfully.');
+        } catch (e) {
+          // Will retry on user gesture
+        }
+      }
+    };
 
     const startAudioStream = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: false, // Keep raw acoustic environment noise for proctoring
+            autoGainControl: true
+          }
+        });
+
         if (!isSubscribed) {
           stream.getTracks().forEach(t => t.stop());
           return;
@@ -286,41 +309,138 @@ export const useProctoringMonitor = (
         const audioCtx = new AudioCtx();
         audioCtxRef.current = audioCtx;
 
+        await resumeAudioContext(audioCtx);
+
+        // User gesture listeners to guarantee AudioContext stays active
+        const handleUserGesture = () => resumeAudioContext(audioCtx);
+        window.addEventListener('click', handleUserGesture, { passive: true });
+        window.addEventListener('keydown', handleUserGesture, { passive: true });
+        window.addEventListener('touchstart', handleUserGesture, { passive: true });
+
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.8;
+        analyser.fftSize = 512; // 256 frequency bins for accurate human vocal spectrum analysis
+        analyser.smoothingTimeConstant = 0.3; // Responsive smoothing
         source.connect(analyser);
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        const freqBins = analyser.frequencyBinCount;
+        const freqArray = new Uint8Array(freqBins);
+        const timeArray = new Uint8Array(analyser.fftSize);
 
+        // Engine 2: Web Speech Recognition (if supported in Chrome/Edge/Safari)
+        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRec) {
+          try {
+            speechRecognitionInstance = new SpeechRec();
+            speechRecognitionInstance.continuous = true;
+            speechRecognitionInstance.interimResults = true;
+            speechRecognitionInstance.lang = 'en-US';
+
+            speechRecognitionInstance.onresult = (event: any) => {
+              if (!isSubscribed) return;
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcript = event.results[i][0]?.transcript?.trim();
+                if (transcript && transcript.length > 1) {
+                  console.log('[Proctoring Audio] Speech phrase detected:', transcript);
+                  setIsVoiceDetected(true);
+                  voiceCooldownUntil = Date.now() + 3000;
+                  logEventIfReady('voice_detected', { 
+                    source: 'speech_recognition', 
+                    transcript: transcript.slice(0, 50),
+                    volume: Math.max(45, smoothedVolume) 
+                  });
+                }
+              }
+            };
+
+            speechRecognitionInstance.onerror = (e: any) => {
+              if (e.error !== 'no-speech') {
+                console.debug('[Proctoring Audio] Speech recognition event:', e.error);
+              }
+            };
+
+            speechRecognitionInstance.onend = () => {
+              if (isSubscribed && speechRecognitionInstance) {
+                try { speechRecognitionInstance.start(); } catch (_) {}
+              }
+            };
+
+            speechRecognitionInstance.start();
+          } catch (e) {
+            console.debug('[Proctoring Audio] SpeechRecognition not active:', e);
+          }
+        }
+
+        // Engine 1: Real-time RMS Waveform & Vocal Formant Energy Analyzer
         const analyzeAudio = () => {
           if (!isSubscribed) return;
 
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
+          const now = performance.now();
+          const deltaMs = Math.min(100, Math.max(1, now - lastAnalyzeTime));
+          lastAnalyzeTime = now;
+
+          // Periodically resume audio context if suspended
+          if (audioCtx.state === 'suspended' && Math.random() < 0.05) {
+            audioCtx.resume().catch(() => {});
           }
-          const avg = sum / bufferLength;
-          const vol = Math.min(100, Math.round((avg / 128) * 100));
-          setAudioVolume(vol);
 
-          const now = Date.now();
-          const threshold = 35; // 35% decibel threshold for speech/noise
-          const sustainedMs = 2000; // Must be sustained for 2 seconds
+          // 1. Time-Domain Waveform RMS (True Sound Pressure Level)
+          analyser.getByteTimeDomainData(timeArray);
+          let sumSquares = 0;
+          for (let i = 0; i < timeArray.length; i++) {
+            const normalized = (timeArray[i] - 128) / 128; // -1.0 to 1.0
+            sumSquares += normalized * normalized;
+          }
+          const rms = Math.sqrt(sumSquares / timeArray.length);
+          // 0.005 is silent ambient, 0.03-0.08 is speech, 0.15+ is loud noise
+          const rmsVolume = Math.min(100, Math.round(rms * 280));
 
-          if (vol >= threshold) {
-            if (!highNoiseStartTimeRef.current) {
-              highNoiseStartTimeRef.current = now;
-            } else if (now - highNoiseStartTimeRef.current >= sustainedMs) {
+          // 2. Frequency-Domain Vocal Formant Energy (100Hz - 3500Hz)
+          analyser.getByteFrequencyData(freqArray);
+          // For 512 FFT at 48kHz, each bin is ~93.75Hz. Bins 1-38 cover 94Hz to 3560Hz (human vocal range)
+          let vocalSum = 0;
+          const vocalBinEnd = Math.min(38, freqBins);
+          for (let i = 1; i < vocalBinEnd; i++) {
+            vocalSum += freqArray[i];
+          }
+          const vocalEnergy = Math.min(100, Math.round((vocalSum / ((vocalBinEnd - 1) * 128)) * 120));
+
+          // Combined acoustic level: peak responsiveness with stable RMS base
+          const instantVolume = Math.min(100, Math.max(rmsVolume, vocalEnergy));
+
+          // Smooth volume transition for UI meter
+          smoothedVolume = Math.round(smoothedVolume * 0.65 + instantVolume * 0.35);
+          setAudioVolume(smoothedVolume);
+
+          // 3. Intelligent Noise & Speech Detection with leaky accumulator
+          // Thresholds:
+          // >= 22%: Conversational speaking, whispers, or background speech
+          // >= 45%: Loud disturbance or shouting
+          const SPEECH_THRESHOLD = 22; 
+          const SUSTAINED_SPEECH_TRIGGER_MS = 650; // Triggers after ~650ms of continuous acoustic noise
+
+          const currentTimeMs = Date.now();
+
+          if (instantVolume >= SPEECH_THRESHOLD) {
+            // Speech or noise is active
+            noiseAccumulatorMs = Math.min(2000, noiseAccumulatorMs + deltaMs);
+
+            if (noiseAccumulatorMs >= SUSTAINED_SPEECH_TRIGGER_MS) {
+              voiceCooldownUntil = currentTimeMs + 2500; // Keep indicator visible for 2.5s
               setIsVoiceDetected(true);
-              logEventIfReady('voice_detected', { volume: vol, threshold });
+              logEventIfReady('voice_detected', { 
+                volume: instantVolume, 
+                threshold: SPEECH_THRESHOLD,
+                duration_ms: Math.round(noiseAccumulatorMs)
+              });
             }
           } else {
-            highNoiseStartTimeRef.current = null;
-            setIsVoiceDetected(false);
+            // Silence / natural speech pause: decay accumulator smoothly
+            noiseAccumulatorMs = Math.max(0, noiseAccumulatorMs - deltaMs * 0.8);
+            
+            if (currentTimeMs >= voiceCooldownUntil) {
+              setIsVoiceDetected(false);
+            }
           }
 
           audioAnimFrameRef.current = requestAnimationFrame(analyzeAudio);
@@ -336,6 +456,12 @@ export const useProctoringMonitor = (
 
     return () => {
       isSubscribed = false;
+      if (speechRecognitionInstance) {
+        try {
+          speechRecognitionInstance.onend = null;
+          speechRecognitionInstance.abort();
+        } catch (_) {}
+      }
       if (audioAnimFrameRef.current) {
         cancelAnimationFrame(audioAnimFrameRef.current);
       }

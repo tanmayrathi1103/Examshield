@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, and_, select
+from sqlalchemy import func, and_, or_, select
 from fastapi import HTTPException, status
 from typing import List, Optional, Dict, Any
 
@@ -196,25 +196,34 @@ class ExamService:
         return exams, total
 
     def list_exams_for_faculty(self, faculty_id: uuid.UUID, skip: int = 0, limit: int = 100) -> tuple[List[Exam], int]:
-        query = self.db.query(Exam).filter(Exam.is_deleted == False, Exam.created_by == faculty_id)
+        query = self.db.query(Exam).filter(
+            Exam.is_deleted == False,
+            or_(
+                Exam.created_by == faculty_id,
+                Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED])
+            )
+        )
         total = query.count()
         exams = query.order_by(Exam.created_at.desc()).offset(skip).limit(limit).all()
         return exams, total
 
     def list_exams_for_student(self, student_id: uuid.UUID, skip: int = 0, limit: int = 100) -> tuple[List[Exam], int]:
-        """Students see all exams assigned to them (ACTIVE, SCHEDULED, DRAFT)."""
+        """Students see all exams assigned to them, plus all active and scheduled published exams."""
         from app.models.exam_attempt import ExamAttempt
         
-        query = self.db.query(Exam, ExamAttempt).join(
-            ExamAssignment, Exam.id == ExamAssignment.exam_id
+        query = self.db.query(Exam, ExamAttempt).outerjoin(
+            ExamAssignment,
+            (Exam.id == ExamAssignment.exam_id) & (ExamAssignment.student_id == student_id) & (ExamAssignment.is_deleted == False)
         ).outerjoin(
             ExamAttempt,
             (ExamAttempt.exam_id == Exam.id) & (ExamAttempt.student_id == student_id) & (ExamAttempt.is_deleted == False)
         ).filter(
             Exam.is_deleted == False,
-            Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED, ExamStatus.DRAFT]),
-            ExamAssignment.student_id == student_id,
-            ExamAssignment.is_deleted == False
+            Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED]),
+            or_(
+                ExamAssignment.student_id == student_id,
+                Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED])
+            )
         )
         total = query.count()
         results = query.order_by(Exam.start_time.asc()).offset(skip).limit(limit).all()

@@ -13,12 +13,20 @@ const DashboardLayout: React.FC = () => {
   const [lastViolationId, setLastViolationId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: string; severity: string } | null>(null);
 
-  // Redirect to Landing if role is guest
+  // Redirect to Landing if role is guest, and protect portal routes
   useEffect(() => {
     if (userRole === 'guest') {
       navigate('/');
+      return;
     }
-  }, [userRole, navigate]);
+
+    const path = location.pathname;
+    if (userRole === 'student' && path.startsWith('/admin')) {
+      navigate('/student/dashboard');
+    } else if (userRole === 'faculty' && path.startsWith('/admin')) {
+      navigate('/faculty/dashboard');
+    }
+  }, [userRole, location.pathname, navigate]);
 
   // Monitor violations to trigger live warnings/toasts during the exam!
   useEffect(() => {

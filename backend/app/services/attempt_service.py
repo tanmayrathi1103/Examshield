@@ -15,12 +15,15 @@ from app.models.question import Question, QuestionOption
 from app.models.attempt_event import AttemptEvent
 from app.models.user import User
 from app.models.student_profile import StudentProfile
-from app.core.enums import AttemptStatus, AssignmentStatus, AttemptEventType, QuestionType, ExamStatus
+from app.core.enums import AttemptStatus, AssignmentStatus, AttemptEventType, QuestionType, ExamStatus, UserRole
 from app.schemas.attempt import StudentAnswerUpdate, ExamAttemptSummary, StudentExamHistoryItem
 from app.schemas.live_monitoring import (
     LiveExamMonitoringResponse,
     LiveStudentSessionResponse,
-    LiveViolationEvent
+    LiveViolationEvent,
+    LiveActiveStudentItem,
+    LiveExamOverviewItem,
+    LiveMonitoringOverviewResponse
 )
 from app.core.websocket_manager import ws_manager
 
@@ -30,19 +33,23 @@ class AttemptService:
         self.db = db
 
     def get_or_create_attempt(self, student_id: uuid.UUID, exam_id: uuid.UUID, is_verification_step: bool = False) -> ExamAttempt:
-        # Check if attempt already exists
+        user = self.db.get(User, student_id)
+        is_staff = bool(user and user.role in (UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPER_ADMIN))
+
+        # Check if an active attempt already exists
         existing_attempt = self.db.scalars(
             select(ExamAttempt).where(
                 and_(
                     ExamAttempt.student_id == student_id,
                     ExamAttempt.exam_id == exam_id,
-                    ExamAttempt.is_deleted == False
+                    ExamAttempt.is_deleted == False,
+                    ExamAttempt.status.in_([AttemptStatus.NOT_STARTED, AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED])
                 )
-            )
+            ).order_by(ExamAttempt.created_at.desc())
         ).first()
 
         if existing_attempt:
-            if not is_verification_step and not existing_attempt.face_verified:
+            if not is_verification_step and not existing_attempt.face_verified and not is_staff:
                 raise ValueError("FACE_VERIFICATION_REQUIRED")
 
             # Resume logic
@@ -85,8 +92,21 @@ class AttemptService:
                 self.db.commit()
                 self.db.refresh(existing_attempt)
                 return existing_attempt
-            else:
-                raise ValueError(f"Exam already {existing_attempt.status.value}")
+
+        # If previous attempts were submitted, soft-delete them so student can retake cleanly
+        past_attempts = self.db.scalars(
+            select(ExamAttempt).where(
+                and_(
+                    ExamAttempt.student_id == student_id,
+                    ExamAttempt.exam_id == exam_id,
+                    ExamAttempt.is_deleted == False
+                )
+            )
+        ).all()
+        for past_att in past_attempts:
+            past_att.is_deleted = True
+        if past_attempts:
+            self.db.commit()
 
         # Need to create a new attempt
         assignment = self.db.scalars(
@@ -99,9 +119,6 @@ class AttemptService:
             )
         ).first()
 
-        if not assignment:
-            raise ValueError("Student is not assigned to this exam")
-
         exam = self.db.get(Exam, exam_id)
         if not exam:
             raise ValueError("Exam not found")
@@ -110,9 +127,19 @@ class AttemptService:
         if exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
             raise ValueError("Exam is not published yet")
 
+        if not assignment:
+            assignment = ExamAssignment(
+                id=uuid.uuid4(),
+                exam_id=exam_id,
+                student_id=student_id,
+                assignment_status=AssignmentStatus.ASSIGNED
+            )
+            self.db.add(assignment)
+            self.db.flush()
+
         # Time window logic
         now = datetime.now(timezone.utc)
-        if exam.start_time:
+        if exam.status != ExamStatus.ACTIVE and exam.start_time:
             # Make start_time timezone aware if not
             start_time = exam.start_time
             if start_time.tzinfo is None:
@@ -120,7 +147,7 @@ class AttemptService:
             if now < start_time:
                 raise ValueError("Exam window has not opened yet")
 
-        if exam.end_time:
+        if exam.status != ExamStatus.ACTIVE and exam.end_time:
             end_time = exam.end_time
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
@@ -149,7 +176,7 @@ class AttemptService:
             expires_at=None,
             total_questions=total_q,
             answered_questions=0,
-            face_verified=False
+            face_verified=True if is_staff else False
         )
         self.db.add(attempt)
         self.db.flush()  # get attempt.id
@@ -169,7 +196,7 @@ class AttemptService:
         self.db.commit()
         self.db.refresh(attempt)
         
-        if not is_verification_step:
+        if not is_verification_step and not is_staff:
             raise ValueError("FACE_VERIFICATION_REQUIRED")
 
         return attempt
@@ -470,7 +497,7 @@ class AttemptService:
         if not exam:
             raise ValueError("Exam not found")
 
-        # Fetch all attempts for this exam with student and profile
+        # Fetch all attempts for this exam with student and profile, active first
         attempts = self.db.execute(
             select(ExamAttempt, User, StudentProfile)
             .join(User, ExamAttempt.student_id == User.id)
@@ -481,13 +508,21 @@ class AttemptService:
                     ExamAttempt.is_deleted == False
                 )
             )
-            .order_by(ExamAttempt.started_at.desc().nullslast())
+            .order_by(
+                ExamAttempt.status.in_([AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED]).desc(),
+                ExamAttempt.created_at.desc()
+            )
         ).all()
 
         sessions = []
         active_count = 0
+        seen_students = set()
 
         for attempt, user, profile in attempts:
+            if user.id in seen_students:
+                continue
+            seen_students.add(user.id)
+
             if attempt.status in [AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED]:
                 active_count += 1
 
@@ -567,6 +602,110 @@ class AttemptService:
             exam_code=exam.exam_code,
             active_count=active_count,
             sessions=sessions
+        )
+
+    def get_all_live_exams_overview(self, faculty_id: Optional[uuid.UUID] = None) -> LiveMonitoringOverviewResponse:
+        """Aggregated overview of all exams showing which tests currently have active students and which students are in them."""
+        exam_query = self.db.query(Exam).filter(
+            Exam.is_deleted == False,
+            Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED, ExamStatus.DRAFT])
+        )
+        if faculty_id:
+            exam_query = exam_query.filter(
+                (Exam.created_by == faculty_id) | (Exam.status.in_([ExamStatus.ACTIVE, ExamStatus.SCHEDULED]))
+            )
+        exams = exam_query.order_by(Exam.created_at.desc()).all()
+
+        overview_items = []
+        total_active_students = 0
+        active_exams_count = 0
+
+        for exam in exams:
+            active_attempts = self.db.execute(
+                select(ExamAttempt, User, StudentProfile)
+                .join(User, ExamAttempt.student_id == User.id)
+                .outerjoin(StudentProfile, User.id == StudentProfile.user_id)
+                .where(
+                    and_(
+                        ExamAttempt.exam_id == exam.id,
+                        ExamAttempt.is_deleted == False,
+                        ExamAttempt.status.in_([AttemptStatus.IN_PROGRESS, AttemptStatus.PAUSED])
+                    )
+                )
+                .order_by(ExamAttempt.started_at.desc().nullslast())
+            ).all()
+
+            active_students = []
+            seen_students = set()
+            for attempt, user, profile in active_attempts:
+                if user.id in seen_students:
+                    continue
+                seen_students.add(user.id)
+
+                all_violations_count = self.db.scalar(
+                    select(func.count(AttemptEvent.id)).where(
+                        and_(
+                            AttemptEvent.attempt_id == attempt.id,
+                            AttemptEvent.event_type.notin_([
+                                AttemptEventType.STARTED,
+                                AttemptEventType.RESUMED,
+                                AttemptEventType.SUBMITTED,
+                                AttemptEventType.AUTO_SUBMITTED,
+                                AttemptEventType.PROCTORING_STARTED
+                            ])
+                        )
+                    )
+                ) or 0
+
+                integrity = 100.0
+                if attempt.risk_score is not None:
+                    integrity = max(0.0, min(100.0, 100.0 - float(attempt.risk_score)))
+                else:
+                    integrity = max(20.0, 100.0 - (all_violations_count * 10.0))
+
+                active_students.append(LiveActiveStudentItem(
+                    student_id=user.id,
+                    student_name=user.full_name,
+                    email=user.email,
+                    roll_no=profile.enrollment_number if profile else None,
+                    department=profile.branch.value if profile and profile.branch else None,
+                    attempt_id=attempt.id,
+                    started_at=attempt.started_at,
+                    status=attempt.status.value,
+                    violations_count=all_violations_count,
+                    integrity_score=round(integrity, 1)
+                ))
+
+            active_count = len(active_students)
+            if active_count > 0:
+                active_exams_count += 1
+                total_active_students += active_count
+
+            enrolled_count = self.db.query(ExamAssignment).filter(
+                ExamAssignment.exam_id == exam.id,
+                ExamAssignment.is_deleted == False
+            ).count()
+
+            overview_items.append(LiveExamOverviewItem(
+                exam_id=exam.id,
+                exam_title=exam.title,
+                exam_code=exam.exam_code,
+                subject=exam.subject,
+                status=exam.status.value,
+                duration_minutes=exam.duration_minutes or 60,
+                total_marks=exam.total_marks or 100,
+                active_count=active_count,
+                total_enrolled=enrolled_count,
+                students=active_students
+            ))
+
+        # Sort so exams with active students are displayed first
+        overview_items.sort(key=lambda x: (x.active_count > 0, x.active_count), reverse=True)
+
+        return LiveMonitoringOverviewResponse(
+            total_active_students=total_active_students,
+            active_exams_count=active_exams_count,
+            exams=overview_items
         )
 
     def toggle_suspend_attempt(self, attempt_id: uuid.UUID) -> ExamAttempt:

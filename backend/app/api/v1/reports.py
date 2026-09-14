@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 import uuid
 
 from app.database.session import get_db
-from app.core.dependencies import require_staff, get_current_student
+from app.core.dependencies import require_staff, get_current_student, get_active_user
 from app.models.user import User
+from app.core.enums import UserRole
 from app.services.report_service import ReportService
 from app.schemas.report import (
     ExamReportSummary,
@@ -67,8 +68,12 @@ def get_student_detail_report(
     exam_id: uuid.UUID,
     student_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff)
+    current_user: User = Depends(get_active_user)
 ):
+    is_staff = current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FACULTY)
+    is_own_report = current_user.id == student_id
+    if not (is_staff or is_own_report):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     try:
         service = ReportService(db)
         return service.get_student_detail_report(exam_id, student_id)

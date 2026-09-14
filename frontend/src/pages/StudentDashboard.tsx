@@ -24,13 +24,16 @@ const StudentDashboard: React.FC = () => {
 
   const getStatusConfig = (exam: typeof exams[0]) => {
     const now = new Date();
+    if (exam.status === 'active') {
+      return { label: 'Active (Available)', color: 'bg-emerald-100 text-emerald-700', canStart: true };
+    }
     if (exam.end_time && new Date(exam.end_time) < now) {
       return { label: 'Expired', color: 'bg-rose-100 text-rose-700', canStart: false };
     }
     if (exam.start_time && new Date(exam.start_time) > now) {
       return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700', canStart: false };
     }
-    if (exam.status === 'active' || exam.status === 'scheduled' || exam.status === 'draft') {
+    if (exam.status === 'scheduled' || exam.status === 'draft') {
       return { label: 'Available', color: 'bg-emerald-100 text-emerald-700', canStart: true };
     }
     return { label: exam.status, color: 'bg-slate-100 text-slate-600', canStart: false };
@@ -115,12 +118,21 @@ const StudentDashboard: React.FC = () => {
                   {/* Action Button */}
                   <div className="mt-auto pt-2">
                     {exam.student_attempt_status && ['submitted', 'auto_submitted', 'evaluated'].includes(exam.student_attempt_status) ? (
-                      <button
-                        onClick={() => exam.student_attempt_id ? navigate(`/student/exam/${exam.id}/result?attemptId=${exam.student_attempt_id}`) : undefined}
-                        className="w-full py-3 bg-emerald-100 text-emerald-700 font-bold rounded-xl text-sm flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Completed (View Result)
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => exam.student_attempt_id ? navigate(`/student/exam/${exam.id}/result?attemptId=${exam.student_attempt_id}`) : undefined}
+                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Result
+                        </button>
+                        <button
+                          onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}
+                          className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm hover:-translate-y-0.5"
+                          title="Start a fresh attempt for this assessment"
+                        >
+                          <Play className="w-3.5 h-3.5" /> Retake
+                        </button>
+                      </div>
                     ) : statusCfg.canStart ? (
                       <button
                         onClick={() => navigate(`/student/exam/${exam.id}/instructions`)}

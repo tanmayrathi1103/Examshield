@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { authApi } from '../api/auth';
+import { getAuthToken, clearAuthTokens } from '../api/axios';
 import type { UserLogin, UserRegister } from '../types';
 
 const extractErrorMessage = (err: any, fallback: string): string => {
@@ -26,9 +27,30 @@ export const useAuth = () => {
     setError(null);
     try {
       const { access_token } = await authApi.login(credentials);
-      localStorage.setItem('access_token', access_token);
       
+      // Store in session storage (tab-isolated) and local storage
+      sessionStorage.setItem('access_token', access_token);
+      localStorage.setItem('access_token', access_token);
+
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path.includes('faculty')) {
+        sessionStorage.setItem('faculty_access_token', access_token);
+        localStorage.setItem('faculty_access_token', access_token);
+      } else if (path.includes('student')) {
+        sessionStorage.setItem('student_access_token', access_token);
+        localStorage.setItem('student_access_token', access_token);
+      } else if (path.includes('admin')) {
+        sessionStorage.setItem('admin_access_token', access_token);
+        localStorage.setItem('admin_access_token', access_token);
+      }
+
       const user = await authApi.getMe();
+      if (user?.role) {
+        sessionStorage.setItem(`${user.role}_access_token`, access_token);
+        localStorage.setItem(`${user.role}_access_token`, access_token);
+        sessionStorage.setItem('current_role', user.role);
+      }
+
       setCurrentUser(user);
       setIsAuthenticated(true);
       return user;
@@ -62,25 +84,38 @@ export const useAuth = () => {
     } catch (err) {
       console.error('Logout error', err);
     } finally {
-      localStorage.removeItem('access_token');
+      const currentRole = currentUser?.role;
+      if (currentRole) {
+        clearAuthTokens(currentRole);
+      } else {
+        clearAuthTokens();
+      }
       setCurrentUser(null);
       setIsAuthenticated(false);
       setIsLoading(false);
     }
-  }, [setCurrentUser, setIsAuthenticated]);
+  }, [currentUser, setCurrentUser, setIsAuthenticated]);
 
   const fetchCurrentUser = useCallback(async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) return null;
+    const token = getAuthToken();
+    if (!token) {
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      return null;
+    }
     
     setIsLoading(true);
     try {
       const user = await authApi.getMe();
       setCurrentUser(user);
       setIsAuthenticated(true);
+      if (user?.role) {
+        sessionStorage.setItem(`${user.role}_access_token`, token);
+        sessionStorage.setItem('access_token', token);
+      }
       return user;
     } catch (err) {
-      localStorage.removeItem('access_token');
+      clearAuthTokens();
       setCurrentUser(null);
       setIsAuthenticated(false);
       return null;

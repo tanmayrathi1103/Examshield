@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { examsApi } from '../api/exams';
+import { useApp } from '../context/AppContext';
 import type { ExamResponse, ExamCreate, ExamUpdate, ExamStatsResponse } from '../types';
 
 export const useExams = () => {
+  const { userRole } = useApp();
   const [exams, setExams] = useState<ExamResponse[]>([]);
   const [currentExam, setCurrentExam] = useState<ExamResponse | null>(null);
   const [stats, setStats] = useState<ExamStatsResponse | null>(null);
@@ -13,14 +15,16 @@ export const useExams = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await examsApi.listExams(skip, limit);
+      const data = userRole === 'student'
+        ? await examsApi.studentListExams(skip, limit)
+        : await examsApi.listExams(skip, limit);
       setExams(data.items);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to fetch exams');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userRole]);
 
   const fetchStudentExams = useCallback(async (skip = 0, limit = 100) => {
     setIsLoading(true);
@@ -39,7 +43,8 @@ export const useExams = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = isStudent ? await examsApi.studentGetExam(id) : await examsApi.getExam(id);
+      const isStudentQuery = isStudent || userRole === 'student';
+      const data = isStudentQuery ? await examsApi.studentGetExam(id) : await examsApi.getExam(id);
       setCurrentExam(data);
       return data;
     } catch (err: any) {
@@ -48,7 +53,7 @@ export const useExams = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userRole]);
 
   const createExam = useCallback(async (examData: ExamCreate) => {
     setIsLoading(true);

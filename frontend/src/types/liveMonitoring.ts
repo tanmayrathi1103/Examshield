@@ -29,3 +29,36 @@ export interface LiveExamMonitoringResponse {
   active_count: number;
   sessions: LiveStudentSessionResponse[];
 }
+
+export interface LiveActiveStudentItem {
+  student_id: string;
+  student_name: string;
+  email: string;
+  roll_no?: string;
+  department?: string;
+  attempt_id: string;
+  started_at?: string;
+  status: string;
+  violations_count: number;
+  integrity_score: number;
+}
+
+export interface LiveExamOverviewItem {
+  exam_id: string;
+  exam_title: string;
+  exam_code: string;
+  subject?: string;
+  status: string;
+  duration_minutes: number;
+  total_marks: number;
+  active_count: number;
+  total_enrolled: number;
+  students: LiveActiveStudentItem[];
+}
+
+export interface LiveMonitoringOverviewResponse {
+  total_active_students: number;
+  active_exams_count: number;
+  exams: LiveExamOverviewItem[];
+}
+

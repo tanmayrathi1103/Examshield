@@ -111,6 +111,7 @@ function App() {
             <Route path="faculty/exams/:examId/report/student/:studentId" element={<StudentDetailReport />} />
             <Route path="faculty/live-monitoring" element={<LiveMonitoring />} />
             <Route path="faculty/student-reports" element={<StudentReports />} />
+            <Route path="faculty/report" element={<BehaviourReport />} />
 
             {/* Admin Portal */}
             <Route path="admin/dashboard" element={<AdminDashboard />} />

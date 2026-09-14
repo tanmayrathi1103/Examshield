@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "supersecretkey"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days for stable proctoring and exam evaluation
     BIOMETRIC_ENCRYPTION_KEY: str = "DjHY5zYAg_wK0hND2jo0xYvJdZi2_KR1_ah5cNguUxM="
     BIOMETRIC_KEY_VERSION: str = "v1"
     

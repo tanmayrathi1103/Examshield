@@ -1,6 +1,6 @@
 import uuid
 import logging
-from typing import List, Any
+from typing import List, Any, Union
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -9,13 +9,17 @@ logger = logging.getLogger(__name__)
 
 from app.core.dependencies import get_db, get_current_faculty, get_current_student, get_current_user, get_current_admin
 from app.models.user import User
+from app.core.enums import UserRole
 from app.schemas.exam import (
     ExamCreate, ExamUpdate, ExamResponse, ExamListResponse,
     StudentExamListResponse,
     ExamAssignmentCreate, ExamAssignmentResponse, ExamAssignmentListResponse,
     StudentForAssignment, StudentForAssignmentList, ExamStatsResponse
 )
-from app.schemas.live_monitoring import LiveExamMonitoringResponse
+from app.schemas.live_monitoring import (
+    LiveExamMonitoringResponse,
+    LiveMonitoringOverviewResponse
+)
 from app.services.exam_service import ExamService
 from app.services.attempt_service import AttemptService
 
@@ -23,8 +27,11 @@ router = APIRouter(prefix="/exams", tags=["Exams"])
 
 
 def require_staff(current_user: User = Depends(get_current_user)):
-    if current_user.role.value not in ["admin", "faculty"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if current_user.role.value not in ["admin", "super_admin", "faculty"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Not authorized: Faculty or administrator privileges required."
+        )
     return current_user
 
 
@@ -37,7 +44,7 @@ def get_faculty_stats(
 ) -> Any:
     """Live dashboard statistics for faculty / admin."""
     service = ExamService(db)
-    if current_user.role.value == "admin":
+    if current_user.role.value in ["admin", "super_admin"]:
         # Admins get global stats — pass None for faculty_id so service fetches all
         stats = service.get_faculty_stats(current_user.id)
     else:
@@ -47,17 +54,19 @@ def get_faculty_stats(
 
 # ─── Exam CRUD ────────────────────────────────────────────────────────────────
 
-@router.get("", response_model=ExamListResponse)
+@router.get("", response_model=Union[StudentExamListResponse, ExamListResponse])
 def list_exams(
     skip: int = 0, limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
     service = ExamService(db)
-    if current_user.role.value == "admin":
+    if current_user.role.value in ["admin", "super_admin"]:
         exams, total = service.list_exams(skip=skip, limit=limit)
     elif current_user.role.value == "faculty":
         exams, total = service.list_exams_for_faculty(faculty_id=current_user.id, skip=skip, limit=limit)
+    elif current_user.role.value == "student":
+        exams, total = service.list_exams_for_student(student_id=current_user.id, skip=skip, limit=limit)
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return {"items": exams, "total": total}
@@ -70,6 +79,17 @@ def create_exam(
     current_faculty: User = Depends(get_current_faculty)
 ) -> Any:
     return ExamService(db).create_exam(exam_in=exam_in, faculty_id=current_faculty.id)
+
+
+@router.get("/live/overview", response_model=LiveMonitoringOverviewResponse, tags=["Live Proctoring"])
+def get_live_monitoring_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff)
+) -> Any:
+    """Aggregated live overview across all exams with active student counts and student details."""
+    service = AttemptService(db)
+    faculty_id = current_user.id if current_user.role.value == "faculty" else None
+    return service.get_all_live_exams_overview(faculty_id=faculty_id)
 
 
 @router.get("/{exam_id}", response_model=ExamResponse)
@@ -241,7 +261,17 @@ def student_list_exams(
     current_student: User = Depends(get_current_student)
 ) -> Any:
     """Return only ACTIVE/SCHEDULED exams assigned to this student."""
-    exams, total = ExamService(db).list_exams_for_student(current_student.id, skip=skip, limit=limit)
+    service = ExamService(db)
+    if current_student.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FACULTY):
+        exams, total = service.list_exams(skip=skip, limit=limit)
+        student_exams = []
+        for e in exams:
+            data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            data["student_attempt_status"] = None
+            data["student_attempt_id"] = None
+            student_exams.append(data)
+        return {"items": student_exams, "total": total}
+    exams, total = service.list_exams_for_student(current_student.id, skip=skip, limit=limit)
     return {"items": exams, "total": total}
 
 

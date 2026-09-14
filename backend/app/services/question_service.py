@@ -23,6 +23,7 @@ class QuestionService:
         if not exam:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
 
+        from app.core.enums import ExamStatus, UserRole
         if role == UserRole.STUDENT:
             from app.models.exam_assignment import ExamAssignment
             assignment = self.db.query(ExamAssignment).filter(
@@ -31,12 +32,16 @@ class QuestionService:
                 ExamAssignment.is_deleted == False
             ).first()
             if not assignment:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this exam")
-            from app.core.enums import ExamStatus
+                if exam.status in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
+                    assignment = ExamAssignment(exam_id=exam_id, student_id=user_id)
+                    self.db.add(assignment)
+                    self.db.commit()
+                else:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this exam")
             if exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Exam is not active")
-        elif role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and exam.created_by != user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to manage questions for this exam")
+        elif role in (UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            pass
         return exam
 
     def get_question_by_id(self, question_id: uuid.UUID) -> Question:

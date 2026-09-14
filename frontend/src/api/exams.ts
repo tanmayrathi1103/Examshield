@@ -2,7 +2,8 @@ import apiClient from './axios';
 import type {
   ExamListResponse, ExamResponse, ExamCreate, ExamUpdate,
   ExamAssignmentListResponse, ExamAssignmentResponse,
-  StudentForAssignmentList, ExamStatsResponse, LiveExamMonitoringResponse
+  StudentForAssignmentList, ExamStatsResponse, LiveExamMonitoringResponse,
+  LiveMonitoringOverviewResponse
 } from '../types';
 
 export const examsApi = {
@@ -82,6 +83,11 @@ export const examsApi = {
 
   getMyReport: async (examId: string) => {
     const response = await apiClient.get(`/exams/${examId}/report/my-report`);
+    return response.data;
+  },
+
+  getLiveOverview: async (): Promise<LiveMonitoringOverviewResponse> => {
+    const response = await apiClient.get<LiveMonitoringOverviewResponse>('/exams/live/overview');
     return response.data;
   },
 

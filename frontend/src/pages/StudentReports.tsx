@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   FileText, Search, Filter, Loader2, AlertCircle, 
   CheckCircle, XCircle, ShieldAlert, BookOpen, Clock, 
-  ChevronRight, UserCheck, RefreshCw
+  ChevronRight, UserCheck, RefreshCw, LogIn, BarChart2
 } from 'lucide-react';
 import { examsApi } from '../api/exams';
 import { adminApi } from '../api/admin';
@@ -32,21 +32,22 @@ const StudentReports: React.FC = () => {
       setLoadingExams(true);
       setError(null);
       
-      const [examsResponse, studentsList] = await Promise.all([
-        examsApi.listExams(0, 100),
-        adminApi.getStudentsDirectory().catch(() => []) // Graceful fallback if not admin
-      ]);
-
+      const examsResponse = await examsApi.listExams(0, 100);
       const examsList = examsResponse.items || [];
       setExams(examsList);
-      setDirectoryStudents(studentsList);
+
+      // Fetch directory students asynchronously without blocking exams render
+      adminApi.getStudentsDirectory()
+        .then((studentsList) => setDirectoryStudents(studentsList || []))
+        .catch(() => setDirectoryStudents([]));
 
       if (examsList.length > 0) {
-        setSelectedExamId(examsList[0].id);
+        setSelectedExamId(prev => (examsList.some(e => e.id === prev) ? prev : examsList[0].id));
       }
     } catch (err: any) {
       console.error('Failed to load exams list:', err);
-      setError(err.response?.data?.detail || 'Failed to load examination reports.');
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : 'Failed to load examination reports.');
     } finally {
       setLoadingExams(false);
     }
@@ -71,7 +72,8 @@ const StudentReports: React.FC = () => {
         setExamPerformance(data);
       } catch (err: any) {
         console.error('Failed to load students report for exam:', err);
-        setError(err.response?.data?.detail || 'Failed to load student performance data for this exam.');
+        const detail = err.response?.data?.detail;
+        setError(typeof detail === 'string' ? detail : 'Failed to load student performance data for this exam.');
       } finally {
         setLoadingReport(false);
       }
@@ -185,6 +187,18 @@ const StudentReports: React.FC = () => {
             </div>
           </div>
         )}
+
+        {selectedExam && (
+          <div className="pt-2 flex justify-end">
+            <button
+              onClick={() => navigate(`/faculty/exams/${selectedExamId}/report`)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100/80 px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
+            >
+              <BarChart2 className="w-4 h-4" />
+              View Exam-Wide Score Statistics & Question Analytics →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Row */}
@@ -237,9 +251,40 @@ const StudentReports: React.FC = () => {
             <p className="text-xs font-semibold text-slate-400">Fetching live student records and scores...</p>
           </div>
         ) : error ? (
-          <div className="p-12 text-center text-rose-600 space-y-2">
-            <AlertCircle className="w-8 h-8 mx-auto" />
-            <p className="text-sm font-bold">{error}</p>
+          <div className="p-14 text-center space-y-4 max-w-md mx-auto">
+            <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-100 shadow-xs">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-slate-800">
+                {error.toLowerCase().includes('authenticated') || error.toLowerCase().includes('privileges') || error.toLowerCase().includes('credentials')
+                  ? 'Session Expired or Sign In Required'
+                  : 'Unable to Load Student Reports'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {error.toLowerCase().includes('authenticated') || error.toLowerCase().includes('credentials')
+                  ? 'Your active session expired or credentials are missing. Please sign in to the Faculty Portal to access candidate examination reports.'
+                  : error}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={loadInitialData}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Retry
+              </button>
+              {(error.toLowerCase().includes('authenticated') || error.toLowerCase().includes('privileges') || error.toLowerCase().includes('credentials')) && (
+                <button
+                  onClick={() => navigate('/login/faculty')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  Sign In to Faculty Portal
+                </button>
+              )}
+            </div>
           </div>
         ) : filteredStudents.length === 0 ? (
           <div className="p-16 text-center italic text-slate-400">
@@ -348,8 +393,8 @@ const StudentReports: React.FC = () => {
                     {hasAttempted ? (
                       <>
                         <button
-                          onClick={() => navigate(`/student/report?examId=${selectedExamId}&studentId=${student.student_id}`)}
-                          className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-indigo-100 transition-colors shadow-2xs"
+                          onClick={() => navigate(`/faculty/report?examId=${selectedExamId}&studentId=${student.student_id}`)}
+                          className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-indigo-100 transition-colors shadow-2xs cursor-pointer"
                           title="View AI Telemetry & Behavior Audit"
                         >
                           <ShieldAlert className="w-3.5 h-3.5" /> AI Integrity

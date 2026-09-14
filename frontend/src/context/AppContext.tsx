@@ -5,6 +5,7 @@ import {
 } from '../data/mockData';
 import type { User } from '../types';
 import { adminApi } from '../api/admin';
+import { getAuthToken } from '../api/axios';
 
 interface AppContextType {
   currentUser: User | null;
@@ -125,7 +126,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs(prev => [newLog, ...prev]);
 
     // Asynchronously persist to backend database if token is available
-    if (localStorage.getItem('access_token')) {
+    if (getAuthToken()) {
       adminApi.createAuditLog(action).catch(() => {});
     }
   };

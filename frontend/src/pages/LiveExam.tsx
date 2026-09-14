@@ -102,6 +102,10 @@ const LiveExam: React.FC = () => {
         
       } catch (err: any) {
         const detail = err.response?.data?.detail;
+        if (detail === 'FACE_VERIFICATION_REQUIRED' || (typeof detail === 'string' && detail.includes('FACE_VERIFICATION_REQUIRED'))) {
+          navigate(`/student/exam/${examId}/face-verification`);
+          return;
+        }
         setError(typeof detail === 'string' ? detail : err.message || "Failed to initialize exam");
       } finally {
         setLoading(false);
