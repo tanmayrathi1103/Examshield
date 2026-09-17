@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Mail, Lock, ArrowRight, ChevronRight, Home, Fingerprint, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ChevronRight, Home, Fingerprint, ShieldCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PortalConfig } from '../../config/portalConfig';
 import { navigateAfterLogin } from '../../utils/portalNavigator';
@@ -34,7 +34,7 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
       const isRoleAllowed = user.role === config.expectedRole || (config.expectedRole === 'admin' && user.role === 'super_admin');
       if (!isRoleAllowed) {
         await logout();
-        setError(`This account belongs to the ${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Portal. Please sign in through the correct portal.`);
+        setError('Access denied. Invalid credentials or unauthorized for this portal.');
         return;
       }
       
@@ -100,12 +100,38 @@ const SharedLogin: React.FC<SharedLoginProps> = ({ config }) => {
           <AnimatePresence>
             {displayError && (
               <motion.div 
-                initial={{ opacity: 0, height: 0, y: -10 }}
-                animate={{ opacity: 1, height: 'auto', y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -10 }}
-                className="mb-6 p-4 bg-rose-50 text-rose-700 text-sm font-semibold rounded-xl border border-rose-100 flex items-start shadow-sm"
+                initial={{ opacity: 0, height: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, height: 'auto', y: 0, scale: 1 }}
+                exit={{ opacity: 0, height: 0, y: -8, scale: 0.98 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="mb-6 p-4 bg-gradient-to-br from-rose-50/95 via-rose-50/70 to-white rounded-2xl border border-rose-200/90 shadow-sm shadow-rose-900/5 space-y-3.5 backdrop-blur-sm"
               >
-                <span>{displayError}</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-rose-100/90 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-900">
+                      Authentication Notice
+                    </h4>
+                    <p className="text-xs sm:text-sm font-medium text-rose-700/90 leading-relaxed mt-0.5">
+                      {displayError}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-rose-200/60 flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-rose-800/80 hidden sm:inline">
+                    Looking for a different portal?
+                  </span>
+                  <Link 
+                    to="/login" 
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200/90 hover:border-rose-600 rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all duration-200 active:scale-95 group ml-auto"
+                  >
+                    <span>Switch Portal</span>
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+                  </Link>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

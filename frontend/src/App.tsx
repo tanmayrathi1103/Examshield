@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 import { useAuth } from './hooks/useAuth';
@@ -123,6 +123,11 @@ function App() {
             <Route path="admin/violation-logs" element={<ViolationLogs />} />
             <Route path="admin/audit-logs" element={<AuditLogs />} />
             <Route path="admin/settings" element={<Settings />} />
+
+            {/* Admin Route Aliases */}
+            <Route path="violation-logs" element={<Navigate to="/admin/violation-logs" replace />} />
+            <Route path="students-directory" element={<Navigate to="/admin/students" replace />} />
+            <Route path="faculty-directory" element={<Navigate to="/admin/faculty" replace />} />
           </Route>
 
           {/* 404 Route */}

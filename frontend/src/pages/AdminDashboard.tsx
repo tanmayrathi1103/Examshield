@@ -67,7 +67,7 @@ const AdminDashboard: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/violation-logs')}
+            onClick={() => navigate('/admin/violation-logs')}
             className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             <span>View All Violations</span>
@@ -102,7 +102,7 @@ const AdminDashboard: React.FC = () => {
           {/* Admin KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div 
-              onClick={() => navigate('/students-directory')}
+              onClick={() => navigate('/admin/students')}
               className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center gap-4"
             >
               <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -115,7 +115,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             <div 
-              onClick={() => navigate('/faculty-directory')}
+              onClick={() => navigate('/admin/faculty')}
               className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center gap-4"
             >
               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -128,7 +128,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             <div 
-              onClick={() => navigate('/violation-logs')}
+              onClick={() => navigate('/admin/violation-logs')}
               className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center gap-4"
             >
               <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center flex-shrink-0">

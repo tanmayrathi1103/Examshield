@@ -12,7 +12,7 @@ const AttractingIcon = ({ mouseX, mouseY, initialX, initialY, iconIndex }: any) 
   const y = useSpring(yTarget, springConfig);
   
   useEffect(() => {
-    const unsub = mouseX.onChange((mx: number) => {
+    const unsub = mouseX.on("change", (mx: number) => {
       const my = mouseY.get();
       const dx = mx - initialX;
       const dy = my - initialY;
