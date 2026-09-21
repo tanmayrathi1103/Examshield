@@ -6,7 +6,9 @@ const MainLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <header className="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center">
         <div className="text-xl font-bold text-primary-600 flex items-center gap-2">
-          <span className="w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center">E</span>
+          <div className="w-11 h-11 rounded-lg bg-white border border-slate-200/50 flex items-center justify-center shadow-sm overflow-hidden">
+            <img src="/logo.png" alt="ExamShield AI Logo" className="w-full h-full object-cover scale-110" />
+          </div>
           ExamShield AI
         </div>
         <nav className="hidden md:flex gap-6 font-medium">

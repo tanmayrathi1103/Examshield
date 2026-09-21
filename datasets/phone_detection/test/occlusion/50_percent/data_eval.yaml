@@ -1,0 +1,4 @@
+train: C:\Users\Dell\Desktop\Examshield\datasets\phone_detection\test\occlusion\50_percent/images
+val: C:\Users\Dell\Desktop\Examshield\datasets\phone_detection\test\occlusion\50_percent/images
+nc: 1
+names: ['cell_phone']

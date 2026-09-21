@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../hooks/useAuth';
 import { 
   LayoutDashboard, User, CheckSquare, Camera, CheckCircle2, ShieldAlert,
   History, BookOpen, UserCheck, Settings, AlertTriangle, FileText, Database, PlusCircle, Monitor, Users,
-  ChevronDown, ChevronRight, Layers, PanelLeftClose, PanelLeftOpen
+  ChevronDown, ChevronRight, Layers, PanelLeftClose, PanelLeftOpen, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Sidebar: React.FC = () => {
   const { userRole, isSidebarCollapsed, toggleSidebar } = useApp();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   // Collapsed by default as requested by user
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -53,127 +56,84 @@ const Sidebar: React.FC = () => {
   return (
     <aside 
       className={`${
-        isSidebarCollapsed ? 'w-20' : 'w-64'
-      } bg-slate-900 text-slate-300 flex flex-col min-h-screen border-r border-slate-800 transition-all duration-300 ease-in-out relative z-30 select-none`}
+        isSidebarCollapsed ? 'w-0 border-transparent' : 'w-64 border-slate-800'
+      } bg-slate-900 text-slate-300 flex flex-col min-h-screen border-r transition-all duration-300 ease-in-out relative z-30 select-none`}
     >
-      {/* Sidebar Header */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between h-16">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <span className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/30 flex-shrink-0">
-            ES
-          </span>
-          {!isSidebarCollapsed && (
-            <span className="font-extrabold text-white text-base tracking-tight truncate">
-              ExamShield AI
+      {/* Content wrapper - fixes width to prevent squishing and fades out when collapsed */}
+      <div className={`flex flex-col h-full w-64 overflow-hidden transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        
+        {/* Sidebar Header */}
+        <div className="p-5 flex items-center h-20 relative shrink-0 border-b border-slate-800/50">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-12 h-12 rounded-xl bg-white border border-slate-700/50 flex items-center justify-center shadow-lg flex-shrink-0 overflow-hidden">
+              <img src="/logo.png" alt="ExamShield Logo" className="w-full h-full object-cover scale-110" />
+            </div>
+            <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 text-lg tracking-tight truncate whitespace-nowrap">
+              ExamShield
             </span>
-          )}
-        </div>
-
-        {/* Sidebar Toggle Hamburger Icon */}
-        <button
-          onClick={toggleSidebar}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-90 active:bg-slate-700 rounded-xl transition-all duration-200"
-          title={isSidebarCollapsed ? "Expand Sidebar (☰)" : "Collapse Sidebar (☰)"}
-        >
-          {isSidebarCollapsed ? (
-            <PanelLeftOpen className="w-5 h-5" />
-          ) : (
-            <PanelLeftClose className="w-5 h-5" />
-          )}
-        </button>
-      </div>
-
-      {/* Mini Mode vs Full Mode Menu */}
-      {isSidebarCollapsed ? (
-        /* MINI ICON ONLY MODE */
-        <div className="flex-1 py-4 space-y-2 flex flex-col items-center">
-          {links.map((link) => {
-            const Icon = link.icon;
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                title={link.label}
-                className={({ isActive }) =>
-                  `w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 group active:scale-90 active:opacity-75 ${
-                    isActive 
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/40' 
-                      : 'hover:bg-slate-800 hover:text-white text-slate-400'
-                  }`
-                }
-              >
-                <Icon className="w-5 h-5 flex-shrink-0 transition-transform group-hover:scale-110" />
-              </NavLink>
-            );
-          })}
-        </div>
-      ) : (
-        /* FULL EXPANDABLE MENU MODE */
-        <div className="flex-1 flex flex-col">
-          {/* Minimal Menu Toggle Button */}
-          <div className="px-3 py-3">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-800/40 hover:bg-slate-800 active:scale-98 text-xs font-semibold text-slate-300 transition-all duration-200 border border-slate-750/60"
-            >
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span className="capitalize">{userRole} Navigation</span>
-              </div>
-              {isMenuOpen ? (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              )}
-            </button>
-          </div>
-
-          {/* Nav Links */}
-          <AnimatePresence>
-            {isMenuOpen && (
-              <motion.nav 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="px-3 space-y-1 overflow-hidden"
-              >
-                {links.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <NavLink
-                      key={link.to}
-                      to={link.to}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-98 active:opacity-75 ${
-                          isActive 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
-                            : 'hover:bg-slate-800/60 hover:text-white text-slate-400'
-                        }`
-                      }
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span>{link.label}</span>
-                    </NavLink>
-                  );
-                })}
-              </motion.nav>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Footer Status */}
-      <div className="p-3 border-t border-slate-800 mt-auto">
-        <div className="bg-slate-800/40 p-3 rounded-xl flex flex-col gap-1">
-          {!isSidebarCollapsed && <div className="text-xs text-slate-400">Proctoring Status</div>}
-          <div className={`flex items-center gap-2 text-xs font-semibold text-emerald-400 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            {!isSidebarCollapsed && 'Active Shield'}
           </div>
         </div>
+
+        {/* FULL EXPANDABLE MENU MODE */}
+        <div className="flex-1 flex flex-col overflow-y-auto py-6">
+          <nav className="px-3 space-y-1.5">
+            {links.map((link) => {
+              const Icon = link.icon;
+              return (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  className={({ isActive }) =>
+                    `group flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 relative overflow-hidden ${
+                      isActive 
+                        ? 'text-white bg-indigo-500/10' 
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {/* Premium active indicator line */}
+                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-3/5 rounded-r-full transition-all duration-300 ${isActive ? 'bg-indigo-500 opacity-100' : 'bg-transparent opacity-0 group-hover:opacity-50 group-hover:bg-slate-600'}`} />
+                      
+                      {/* Premium Icon Animation */}
+                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-all duration-300 ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300 group-hover:scale-110'}`} />
+                      
+                      <span className="tracking-wide">{link.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Footer Status and Logout */}
+        <div className="p-3 border-t border-slate-800 shrink-0 space-y-2">
+          <div className="bg-slate-800/40 p-3 rounded-xl flex flex-col gap-1">
+            <div className="text-xs text-slate-400">Proctoring Status</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Active Shield
+            </div>
+          </div>
+          
+          {/* Subtle Modern Logout */}
+          <button
+             onClick={async () => {
+               await logout();
+               navigate('/login');
+             }}
+             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-300 group"
+          >
+             <span className="text-sm font-medium tracking-wide">Logout</span>
+             <LogOut className="w-[18px] h-[18px] group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+
       </div>
     </aside>
   );

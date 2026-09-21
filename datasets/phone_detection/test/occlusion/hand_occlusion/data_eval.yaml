@@ -1,0 +1,4 @@
+train: C:\Users\Dell\Desktop\Examshield\datasets\phone_detection\test\occlusion\hand_occlusion/images
+val: C:\Users\Dell\Desktop\Examshield\datasets\phone_detection\test\occlusion\hand_occlusion/images
+nc: 1
+names: ['cell_phone']
